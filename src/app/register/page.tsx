@@ -20,34 +20,36 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4 font-sans">
       <div className="w-full max-w-md">
         <Card className="shadow-2xl">
-          <CardHeader className="text-center">
-             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary">
+          <CardHeader className="text-center space-y-4 p-6">
+             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary">
               <Building2 className="h-8 w-8 text-primary-foreground" />
             </div>
-            <CardTitle className="text-3xl font-bold text-primary">Create an Account</CardTitle>
-            <CardDescription>Join the BUConnect community today.</CardDescription>
+            <div>
+                <CardTitle className="text-3xl font-bold text-primary">Create an Account</CardTitle>
+                <CardDescription className="pt-2">Join the BUConnect community today.</CardDescription>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
-                <Input id="name" placeholder="John Doe" required />
+                <Input id="name" placeholder="John Doe" required className="text-base" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="name@example.com" required />
+                <Input id="email" type="email" placeholder="name@example.com" required className="text-base"/>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" required />
+                <Input id="password" type="password" required className="text-base"/>
               </div>
                <div className="space-y-2">
                 <Label htmlFor="role">I am a...</Label>
                 <Select required>
-                    <SelectTrigger id="role">
+                    <SelectTrigger id="role" className="text-base">
                         <SelectValue placeholder="Select your role" />
                     </SelectTrigger>
                     <SelectContent>
@@ -56,7 +58,7 @@ export default function RegisterPage() {
                     </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-lg py-6">
                 Create Account
               </Button>
             </form>

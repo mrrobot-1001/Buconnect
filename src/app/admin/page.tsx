@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { mockPosts, mockUsers } from "@/lib/mock-data";
-import { Activity, ArrowUpRight, Users, FileText, DollarSign } from "lucide-react";
+import { Activity, ArrowUpRight, Users, FileText } from "lucide-react";
 import Link from "next/link";
 import { UserAvatar } from "@/components/UserAvatar";
 import { PostCard } from "@/components/PostCard";
@@ -18,7 +18,7 @@ export default function AdminDashboard() {
   return (
     <AdminLayout>
       <div className="flex flex-col gap-4">
-        <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -26,7 +26,7 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalUsers}</div>
-              <p className="text-xs text-muted-foreground">+{newUsersToday} from yesterday</p>
+              <p className="text-xs text-muted-foreground">+{newUsersToday} new users today</p>
             </CardContent>
           </Card>
           <Card>
@@ -49,6 +49,16 @@ export default function AdminDashboard() {
               <p className="text-xs text-muted-foreground">+201 since last hour</p>
             </CardContent>
           </Card>
+           <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">New Connections</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">+120</div>
+              <p className="text-xs text-muted-foreground">+50 since last hour</p>
+            </CardContent>
+          </Card>
         </div>
         <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
           <Card className="xl:col-span-2">
@@ -67,7 +77,7 @@ export default function AdminDashboard() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              {mockPosts.slice(0, 2).map((post) => (
+              {mockPosts.slice(0, 3).map((post) => (
                   <PostCard key={post.id} post={post} />
               ))}
             </CardContent>
@@ -79,8 +89,8 @@ export default function AdminDashboard() {
                 Recently joined students and alumni.
               </CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-8">
-              {mockUsers.slice(0,4).map(user => (
+            <CardContent className="grid gap-6">
+              {mockUsers.slice(0,5).map(user => (
                  <div key={user.id} className="flex items-center gap-4">
                     <UserAvatar user={user} />
                     <div className="grid gap-1">

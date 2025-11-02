@@ -2,7 +2,7 @@ import { mockUsers } from "@/lib/mock-data";
 import { Card, CardContent, CardHeader } from "./ui/card";
 import { UserAvatar } from "./UserAvatar";
 import { Separator } from "./ui/separator";
-import { Bookmark, Building, Rss } from "lucide-react";
+import { Bookmark, Building, Rss, Users } from "lucide-react";
 import Link from "next/link";
 import { Button } from "./ui/button";
 
@@ -19,11 +19,11 @@ export default function LeftSidebar() {
              <UserAvatar user={currentUser} className="h-16 w-16 border-4 border-card" />
            </div>
         </CardHeader>
-        <CardContent className="text-center pt-12 pb-4">
+        <CardContent className="text-center pt-10 pb-4">
           <Link href={`/profile/${currentUser.id}`}>
             <h3 className="font-semibold hover:underline">{currentUser.name}</h3>
           </Link>
-          <p className="text-xs text-muted-foreground mt-1">{currentUser.role === 'STUDENT' ? currentUser.course : currentUser.profession}</p>
+          <p className="text-xs text-muted-foreground mt-1 truncate">{currentUser.role === 'STUDENT' ? currentUser.course : currentUser.profession}</p>
         </CardContent>
         <Separator />
         <CardContent className="p-4 space-y-2 text-sm">
@@ -41,6 +41,9 @@ export default function LeftSidebar() {
           <CardContent className="p-2">
             <Button variant="ghost" className="w-full justify-start gap-2">
                 <Rss className="h-4 w-4" /> My Feed
+            </Button>
+            <Button variant="ghost" className="w-full justify-start gap-2">
+                <Users className="h-4 w-4" /> Network
             </Button>
             <Button variant="ghost" className="w-full justify-start gap-2">
                 <Bookmark className="h-4 w-4" /> Saved Posts

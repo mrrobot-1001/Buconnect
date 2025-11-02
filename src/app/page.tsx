@@ -13,6 +13,7 @@ import { useState } from "react";
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,17 +28,19 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4 font-sans">
       <div className="w-full max-w-md">
         <Card className="shadow-2xl">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary">
+          <CardHeader className="text-center space-y-4 p-6">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary">
               <Building2 className="h-8 w-8 text-primary-foreground" />
             </div>
-            <CardTitle className="text-3xl font-bold text-primary">BUConnect</CardTitle>
-            <CardDescription>Welcome back! Please login to your account.</CardDescription>
+            <div>
+                <CardTitle className="text-3xl font-bold text-primary">BUConnect</CardTitle>
+                <CardDescription className="pt-2">Welcome back! Please login to your account.</CardDescription>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -48,6 +51,7 @@ export default function LoginPage() {
                   required 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="text-base"
                 />
               </div>
               <div className="space-y-2">
@@ -57,9 +61,16 @@ export default function LoginPage() {
                     Forgot password?
                   </Link>
                 </div>
-                <Input id="password" type="password" required />
+                <Input 
+                    id="password" 
+                    type="password" 
+                    required 
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="text-base"
+                />
               </div>
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-lg py-6">
                 Login
               </Button>
             </form>
@@ -69,9 +80,10 @@ export default function LoginPage() {
                 Sign up
               </Link>
             </div>
-            <div className="mt-4 text-center text-xs text-muted-foreground">
-              <p>Admin Login: priya.s@example.com</p>
-              <p>Student Login: rohan@example.com</p>
+            <div className="mt-4 text-center text-xs text-muted-foreground space-y-1">
+              <p><span className="font-semibold">Admin:</span> priya.s@example.com</p>
+              <p><span className="font-semibold">Student:</span> rohan@example.com</p>
+              <p>(Use any password)</p>
             </div>
           </CardContent>
         </Card>

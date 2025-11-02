@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import Link from "next/link";
 
 export default function AdminSettingsPage() {
   return (
@@ -18,14 +17,14 @@ export default function AdminSettingsPage() {
           <nav
             className="grid gap-4 text-sm text-muted-foreground"
           >
-            <a href="#" className="font-semibold text-primary">
+            <Link href="#" className="font-semibold text-primary">
               General
-            </a>
-            <a href="#">Security</a>
-            <a href="#">Integrations</a>
-            <a href="#">Support</a>
-            <a href="#">Organizations</a>
-            <a href="#">Advanced</a>
+            </Link>
+            <Link href="#">Security</Link>
+            <Link href="#">Integrations</Link>
+            <Link href="#">Support</Link>
+            <Link href="#">Organizations</Link>
+            <Link href="#">Advanced</Link>
           </nav>
           <div className="grid gap-6">
             <Card>
