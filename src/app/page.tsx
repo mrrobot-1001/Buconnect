@@ -4,18 +4,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { mockUsers } from "@/lib/mock-data";
 import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [email, setEmail] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // In a real app, you'd handle authentication here.
-    // For this prototype, we'll just navigate to the feed.
-    router.push("/feed");
+    const user = mockUsers.find(u => u.email === email);
+    
+    if (user?.role === 'ADMIN') {
+        router.push("/admin");
+    } else {
+        router.push("/feed");
+    }
   };
 
   return (
@@ -33,7 +41,14 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="name@example.com" required />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="name@example.com" 
+                  required 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -53,6 +68,10 @@ export default function LoginPage() {
               <Link href="/register" className="font-semibold text-primary hover:underline">
                 Sign up
               </Link>
+            </div>
+            <div className="mt-4 text-center text-xs text-muted-foreground">
+              <p>Admin Login: priya.s@example.com</p>
+              <p>Student Login: rohan@example.com</p>
             </div>
           </CardContent>
         </Card>
