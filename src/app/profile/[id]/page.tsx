@@ -1,78 +1,520 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/AppLayout";
 import { PostCard } from "@/components/PostCard";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { mockPosts, mockUsers } from "@/lib/mock-data";
-import { Mail, Plus, Briefcase, GraduationCap, MapPin } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import type { PostWithAuthor } from "@/lib/definitions";
+import { Mail, Plus, Briefcase, GraduationCap, MapPin, Edit2, UserMinus, Upload, Loader2 } from "lucide-react";
 import Image from "next/image";
 
-type ProfilePageProps = {
-    params: { id: string };
-};
+interface UserProfile {
+    id: string;
+    name: string;
+    email: string;
+    role: 'STUDENT' | 'ALUMNI' | 'ADMIN';
+    bio: string | null;
+    profileImage: string | null;
+    profile_image: string | null;
+    course: string | null;
+    batch: number | null;
+    profession: string | null;
+    createdAt: string;
+    created_at?: string;
+    _count: {
+        posts: number;
+        followers: number;
+        following: number;
+    };
+}
 
-export default function ProfilePage({ params }: ProfilePageProps) {
-    // In a real app, you would fetch user data from your database based on params.id
-    const user = mockUsers.find(u => u.id === params.id) || mockUsers[0];
-    const userPosts = mockPosts.filter(p => p.authorId === user.id);
+type ConnectionStatus = 'CONNECTED' | 'PENDING' | 'NOT_CONNECTED';
+
+export default function ProfilePage() {
+    const params = useParams();
+    const router = useRouter();
+    const userId = params?.id as string;
+    
+    const [user, setUser] = useState<UserProfile | null>(null);
+    const [userPosts, setUserPosts] = useState<PostWithAuthor[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('NOT_CONNECTED');
+    const [isOwnProfile, setIsOwnProfile] = useState(false);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [uploading, setUploading] = useState(false);
+
+    // Edit form state
+    const [editForm, setEditForm] = useState({
+        name: '',
+        bio: '',
+        course: '',
+        batch: '',
+        profession: ''
+    });
+
+    useEffect(() => {
+        const fetchUserData = async () => {
+            try {
+                // Get current user from localStorage
+                const currentUserStr = localStorage.getItem('currentUser');
+                const currentUserId = currentUserStr ? JSON.parse(currentUserStr).id : null;
+                setIsOwnProfile(currentUserId === userId);
+
+                // Fetch user profile
+                const userRes = await fetch(`/api/users/${userId}`);
+                if (!userRes.ok) throw new Error('Failed to fetch user');
+                const userData = await userRes.json();
+                setUser(userData);
+
+                // Set edit form values
+                setEditForm({
+                    name: userData.name || '',
+                    bio: userData.bio || '',
+                    course: userData.course || '',
+                    batch: userData.batch?.toString() || '',
+                    profession: userData.profession || ''
+                });
+
+                // Fetch user posts
+                const postsRes = await fetch(`/api/users/${userId}/posts`);
+                if (!postsRes.ok) throw new Error('Failed to fetch posts');
+                const postsData = await postsRes.json();
+                setUserPosts(postsData);
+
+                // Check connection status (only if not own profile)
+                if (currentUserId && currentUserId !== userId) {
+                    try {
+                        const requestsRes = await fetch(`/api/connections/requests?userId=${currentUserId}`);
+                        if (requestsRes.ok) {
+                            const { incoming, outgoing } = await requestsRes.json();
+                            
+                            // Check outgoing requests (sent by current user to this user)
+                            const outgoingToThisUser = outgoing.find(
+                                (r: any) => r.following_id === userId
+                            );
+                            
+                            if (outgoingToThisUser) {
+                                if (outgoingToThisUser.status === 'ACCEPTED') {
+                                    setConnectionStatus('CONNECTED');
+                                } else if (outgoingToThisUser.status === 'PENDING') {
+                                    setConnectionStatus('PENDING');
+                                }
+                            }
+                            
+                            // Also check incoming requests (sent by this user to current user)
+                            const incomingFromThisUser = incoming.find(
+                                (r: any) => r.follower_id === userId
+                            );
+                            
+                            if (incomingFromThisUser && incomingFromThisUser.status === 'ACCEPTED') {
+                                setConnectionStatus('CONNECTED');
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Error fetching connection status:', err);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        if (userId) {
+            fetchUserData();
+        }
+    }, [userId]);
+
+    const handleConnect = async () => {
+        try {
+            const currentUserStr = localStorage.getItem('currentUser');
+            if (!currentUserStr) {
+                router.push('/');
+                return;
+            }
+
+            const currentUserId = JSON.parse(currentUserStr).id;
+
+            if (connectionStatus === 'PENDING') {
+                // Cancel pending request
+                const res = await fetch('/api/connections/requests', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sender_id: currentUserId,
+                        recipient_id: userId 
+                    })
+                });
+
+                if (res.ok) {
+                    setConnectionStatus('NOT_CONNECTED');
+                }
+            } else if (connectionStatus === 'NOT_CONNECTED') {
+                // Send connection request
+                const res = await fetch('/api/connections/requests', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sender_id: currentUserId,
+                        recipient_id: userId 
+                    })
+                });
+
+                if (res.ok) {
+                    setConnectionStatus('PENDING');
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling connection:', error);
+            alert('Failed to send connection request');
+        }
+    };
+
+    const handleDisconnect = async () => {
+        try {
+            const currentUserStr = localStorage.getItem('currentUser');
+            if (!currentUserStr) return;
+
+            const currentUserId = JSON.parse(currentUserStr).id;
+
+            const res = await fetch('/api/connections/requests', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    sender_id: currentUserId,
+                    recipient_id: userId 
+                })
+            });
+
+            if (res.ok) {
+                setConnectionStatus('NOT_CONNECTED');
+            }
+        } catch (error) {
+            console.error('Error disconnecting:', error);
+            alert('Failed to disconnect');
+        }
+    };
+
+    const handleProfilePictureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setUploading(true);
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('userId', userId);
+
+            const res = await fetch('/api/upload/profile-picture', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) throw new Error('Upload failed');
+            
+            const data = await res.json();
+            setUser(prev => prev ? { 
+                ...prev, 
+                profile_image: data.url, 
+                profileImage: data.url 
+            } : null);
+        } catch (error) {
+            console.error('Error uploading profile picture:', error);
+            alert('Failed to upload profile picture');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleUpdateProfile = async () => {
+        try {
+            const res = await fetch(`/api/users/${userId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: editForm.name,
+                    bio: editForm.bio,
+                    course: editForm.course || null,
+                    batch: editForm.batch ? parseInt(editForm.batch) : null,
+                    profession: editForm.profession || null
+                })
+            });
+
+            if (!res.ok) throw new Error('Update failed');
+            
+            const updatedUser = await res.json();
+            setUser(updatedUser);
+            setEditDialogOpen(false);
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            alert('Failed to update profile');
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <AppLayout>
+                <div className="flex items-center justify-center h-64">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+            </AppLayout>
+        );
+    }
+
+    if (!user) {
+        return (
+            <AppLayout>
+                <Card>
+                    <CardContent className="p-8 text-center">
+                        <p className="text-muted-foreground">User not found</p>
+                    </CardContent>
+                </Card>
+            </AppLayout>
+        );
+    }
 
     return (
         <AppLayout>
            <div className="space-y-6">
-            <Card>
-                <CardHeader className="p-0">
-                    <div className="relative h-28 md:h-40">
-                         <Image src="https://picsum.photos/seed/cover1/1200/300" alt="Cover image" fill className="object-cover rounded-t-lg" data-ai-hint="abstract texture" />
+            <Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm overflow-hidden">
+                <CardHeader className="p-0 pb-0">
+                    {/* Profile Header without banner */}
+                    <div className="p-6 sm:p-8">
+                        <div className="flex flex-col sm:flex-row sm:items-start gap-6">
+                            {/* Profile Picture */}
+                            <div className="relative flex-shrink-0">
+                                <div className="relative h-32 w-32 rounded-full overflow-hidden border-4 border-blue-100 shadow-lg">
+                                    <UserAvatar user={user} className="h-32 w-32" />
+                                </div>
+                                {isOwnProfile && (
+                                   <label className="absolute bottom-2 right-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white p-3 rounded-full cursor-pointer hover:shadow-lg transition-all hover:scale-110">
+                                     {uploading ? (
+                                       <Loader2 className="h-5 w-5 animate-spin" />
+                                     ) : (
+                                       <Upload className="h-5 w-5" />
+                                     )}
+                                     <input
+                                       type="file"
+                                       accept="image/*"
+                                       className="hidden"
+                                       onChange={handleProfilePictureUpload}
+                                       disabled={uploading}
+                                     />
+                                   </label>
+                                )}
+                            </div>
+
+                            {/* Profile Info */}
+                            <div className="flex-1">
+                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                                    <div>
+                                        <h1 className="text-3xl font-bold text-gray-900">{user.name}</h1>
+                                        <p className="text-gray-600 text-sm sm:text-base mt-1">{user.bio || 'No bio added yet'}</p>
+                                        
+                                        {/* Role and Details */}
+                                        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+                                            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">
+                                                {user.role === 'STUDENT' ? (
+                                                    <>
+                                                        <GraduationCap className="h-4 w-4" />
+                                                        {user.course || 'Student'}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Briefcase className="h-4 w-4" />
+                                                        {user.profession || user.role}
+                                                    </>
+                                                )}
+                                            </span>
+                                            {user.role === 'STUDENT' && user.batch && (
+                                                <span className="text-sm text-gray-600 font-medium">Batch {user.batch}</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-col gap-2 sm:ml-auto">
+                                        {isOwnProfile ? (
+                                          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                                            <DialogTrigger asChild>
+                                              <Button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white gap-2 shadow-md">
+                                                <Edit2 className="h-4 w-4" /> Edit Profile
+                                              </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-2xl">
+                                              <DialogHeader>
+                                                <DialogTitle className="text-xl font-bold">Edit Profile</DialogTitle>
+                                              </DialogHeader>
+                                              <div className="space-y-4">
+                                                <div>
+                                                  <Label htmlFor="name" className="font-semibold">Full Name</Label>
+                                                  <Input
+                                                    id="name"
+                                                    value={editForm.name}
+                                                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                                                    placeholder="Enter your full name"
+                                                    className="mt-1"
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <Label htmlFor="bio" className="font-semibold">Bio</Label>
+                                                  <Textarea
+                                                    id="bio"
+                                                    value={editForm.bio}
+                                                    onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                                                    placeholder="Tell us about yourself"
+                                                    rows={3}
+                                                    className="mt-1"
+                                                  />
+                                                </div>
+                                                {user.role === 'STUDENT' && (
+                                                  <>
+                                                    <div>
+                                                      <Label htmlFor="course" className="font-semibold">Course</Label>
+                                                      <Input
+                                                        id="course"
+                                                        value={editForm.course}
+                                                        onChange={(e) => setEditForm({ ...editForm, course: e.target.value })}
+                                                        placeholder="Your course name"
+                                                        className="mt-1"
+                                                      />
+                                                    </div>
+                                                    <div>
+                                                      <Label htmlFor="batch" className="font-semibold">Batch Year</Label>
+                                                      <Input
+                                                        id="batch"
+                                                        type="number"
+                                                        value={editForm.batch}
+                                                        onChange={(e) => setEditForm({ ...editForm, batch: e.target.value })}
+                                                        placeholder="e.g., 2024"
+                                                        className="mt-1"
+                                                      />
+                                                    </div>
+                                                  </>
+                                                )}
+                                                {user.role === 'ALUMNI' && (
+                                                  <div>
+                                                    <Label htmlFor="profession" className="font-semibold">Profession</Label>
+                                                    <Input
+                                                      id="profession"
+                                                      value={editForm.profession}
+                                                      onChange={(e) => setEditForm({ ...editForm, profession: e.target.value })}
+                                                      placeholder="Your profession"
+                                                      className="mt-1"
+                                                    />
+                                                  </div>
+                                                )}
+                                                <div className="flex justify-end gap-2 pt-4">
+                                                  <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                                                    Cancel
+                                                  </Button>
+                                                  <Button 
+                                                    onClick={handleUpdateProfile}
+                                                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+                                                  >
+                                                    Save Changes
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                            </DialogContent>
+                                          </Dialog>
+                                        ) : (
+                                          <>
+                                            {connectionStatus === 'CONNECTED' ? (
+                                              <div className="flex flex-col gap-2">
+                                                <Button 
+                                                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white gap-2"
+                                                  onClick={() => router.push('/messaging')}
+                                                >
+                                                  <Mail className="h-4 w-4" /> Message
+                                                </Button>
+                                                <Button 
+                                                  variant="outline" 
+                                                  className="gap-2 border-red-200 text-red-600 hover:bg-red-50"
+                                                  onClick={handleDisconnect}
+                                                >
+                                                  <UserMinus className="h-4 w-4" /> Disconnect
+                                                </Button>
+                                              </div>
+                                            ) : (
+                                              <Button
+                                                onClick={handleConnect}
+                                                className={`gap-2 ${
+                                                  connectionStatus === 'PENDING'
+                                                    ? 'border-blue-300 text-blue-600 hover:bg-blue-50'
+                                                    : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white'
+                                                }`}
+                                                variant={connectionStatus === 'PENDING' ? 'outline' : 'default'}
+                                              >
+                                                {connectionStatus === 'PENDING' ? (
+                                                  <>
+                                                    <UserMinus className="h-4 w-4" /> Cancel Request
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <Plus className="h-4 w-4" /> Connect
+                                                  </>
+                                                )}
+                                              </Button>
+                                            )}
+                                          </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                     <div className="p-4 sm:p-6 pb-0">
-                        <div className="flex flex-col sm:flex-row sm:items-end -mt-16 sm:-mt-20">
-                           <UserAvatar user={user} className="h-28 w-28 sm:h-32 sm:w-32 border-4 border-card" />
-                           <div className="mt-2 sm:ml-4 flex-1">
-                                <h2 className="text-2xl font-bold">{user.name}</h2>
-                                <p className="text-muted-foreground text-sm sm:text-base">{user.bio}</p>
-                           </div>
-                           <div className="flex gap-2 mt-4 sm:mt-0">
-                                <Button className="bg-primary hover:bg-primary/90 gap-2"><Plus className="h-4 w-4"/> Connect</Button>
-                                <Button variant="outline" className="gap-2"><Mail className="h-4 w-4"/> Message</Button>
-                           </div>
-                        </div>
-                        <div className="pt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                            {user.role === 'ALUMNI' && user.profession && (
-                                <span className="flex items-center gap-1.5"><Briefcase className="h-4 w-4" />{user.profession}</span>
-                            )}
-                            {user.role === 'STUDENT' && user.course && (
-                                <span className="flex items-center gap-1.5"><GraduationCap className="h-4 w-4" />{user.course}</span>
-                            )}
-                            <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" />Your City, Country</span>
-                        </div>
-                     </div>
                 </CardHeader>
-                <CardContent className="p-4 sm:p-6">
-                    <div className="flex gap-8">
-                        <div>
-                            <span className="font-bold">125</span> <span className="text-muted-foreground">Connections</span>
+
+                {/* Stats Section */}
+                <CardContent className="p-6 sm:p-8 border-t border-gray-100">
+                    <div className="grid grid-cols-3 gap-6">
+                        <div className="text-center">
+                            <p className="text-2xl font-bold text-blue-600">{user._count?.followers || 0}</p>
+                            <p className="text-sm text-gray-600 mt-1">Followers</p>
                         </div>
-                         <div>
-                            <span className="font-bold">42</span> <span className="text-muted-foreground">Profile Views</span>
+                        <div className="text-center border-l border-r border-gray-200">
+                            <p className="text-2xl font-bold text-blue-600">{user._count?.following || 0}</p>
+                            <p className="text-sm text-gray-600 mt-1">Following</p>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-2xl font-bold text-blue-600">{user._count?.posts || 0}</p>
+                            <p className="text-sm text-gray-600 mt-1">Posts</p>
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
-            <div>
-                <h3 className="text-xl font-bold mb-4">Activity</h3>
-                 <div className="space-y-4">
-                    {userPosts.length > 0 ? userPosts.map((post) => (
-                        <PostCard key={post.id} post={post} />
-                    )) : (
-                        <Card>
-                            <CardContent className="p-8 text-center text-muted-foreground">
-                                No posts yet.
-                            </CardContent>
-                        </Card>
-                    )}
+            {/* Activity Section */}
+            {user._count?.posts > 0 && (
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Activity</h2>
+                    <div className="space-y-4">
+                        {userPosts.map((post) => (
+                            <PostCard key={post.id} post={post} />
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {user._count?.posts === 0 && (
+                <Card className="border-0 shadow-sm bg-gray-50/50">
+                    <CardContent className="p-12 text-center">
+                        <p className="text-gray-500 text-lg">No posts yet</p>
+                        <p className="text-gray-400 text-sm mt-1">
+                            {isOwnProfile ? "Start sharing your thoughts and experiences!" : "This user hasn't posted yet"}
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
            </div>
         </AppLayout>
     );

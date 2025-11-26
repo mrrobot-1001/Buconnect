@@ -6,8 +6,18 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'BUConnect',
-  description: 'Alumni & Student Networking Platform for Disha College',
+  title: 'Buconnect - Alumni & Student Network',
+  description: 'A minimal and sleek platform for alumni and students to connect, collaborate, and build networks.',
+  icons: {
+    icon: [
+      { url: '/logo.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/logo.svg',
+    shortcut: '/logo.svg',
+  },
+  other: {
+    'msapplication-TileImage': '/logo.svg',
+  },
 };
 
 export default function RootLayout({
