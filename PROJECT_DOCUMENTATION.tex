@@ -1,0 +1,211 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{float}
+
+\geometry{a4paper, margin=1in}
+
+\title{\textbf{Project Documentation: Buconnect}}
+\author{Buconnect Development Team}
+\date{\today}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document provides a comprehensive technical overview of \textbf{Buconnect}, a social networking platform tailored for students and alumni. It details the system architecture, technology stack, database schema, and implementation specifics of key modules including authentication, performance optimization, and the user interface design system.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+Buconnect is designed to foster connections within an educational community. It allows users (Students, Alumni, and Admins) to create profiles, share posts, engage in discussions via comments, and build a professional network. The platform leverages modern web technologies to ensure performance, scalability, and a premium user experience.
+
+\section{System Architecture}
+The application is built using the \textbf{Next.js 15} framework, utilizing the \textbf{App Router} architecture. This allows for a hybrid rendering approach:
+\begin{itemize}
+    \item \textbf{Server Components}: Used for data fetching and heavy computations to reduce client-side bundle size.
+    \item \textbf{Client Components}: Used for interactive UI elements (forms, buttons, dynamic feedback).
+\end{itemize}
+The backend logic is integrated directly into the Next.js application via API routes and Server Actions, interacting with a PostgreSQL database managed by Supabase.
+
+\section{Technology Stack}
+
+\subsection{Core Framework}
+\begin{itemize}
+    \item \textbf{Next.js 15.3.3}: The primary React framework.
+    \item \textbf{TypeScript}: Ensures type safety across the entire codebase.
+    \item \textbf{React 18}: utilized for component-based UI development.
+\end{itemize}
+
+\subsection{Database \& ORM}
+\begin{itemize}
+    \item \textbf{PostgreSQL}: Relational database hosted on Supabase.
+    \item \textbf{Prisma ORM}: Used for database modeling and type-safe queries.
+    \item \textbf{Supabase}: Provides the database infrastructure and authentication services.
+\end{itemize}
+
+\subsection{Styling \& UI}
+\begin{itemize}
+    \item \textbf{Tailwind CSS}: Utility-first CSS framework.
+    \item \textbf{Shadcn UI}: Reusable components built with Radix UI and Tailwind.
+    \item \textbf{Lucide React}: Iconography.
+    \item \textbf{Recharts}: Data visualization library.
+\end{itemize}
+
+\section{Database Design}
+The data model is defined in \texttt{prisma/schema.prisma}. Key entities include:
+
+\subsection{User}
+Represents a registered member of the platform.
+\begin{itemize}
+    \item \textbf{Roles}: \texttt{STUDENT}, \texttt{ALUMNI}, \texttt{ADMIN}.
+    \item \textbf{Attributes}: Name, Email, Bio, Profile Image, Course, Batch, Profession.
+    \item \textbf{Relationships}: Has many Posts, Comments, Likes. Can follow and be followed by other Users.
+\end{itemize}
+
+\subsection{Post}
+Represents user-generated content.
+\begin{itemize}
+    \item \textbf{Attributes}: Title, Content (Text), Image URL.
+    \item \textbf{Relationships}: Belongs to an Author (User). Has many Comments and Likes.
+\end{itemize}
+
+\subsection{Connection}
+Implements the social graph (Follower/Following system).
+\begin{itemize}
+    \item \textbf{Structure}: Self-referential many-to-many relationship on the User model.
+    \item \textbf{Constraints}: Unique constraint on \texttt{[followerId, followingId]} to prevent duplicate follows.
+\end{itemize}
+
+\section{Implementation Details}
+
+\subsection{Authentication}
+Currently, the application uses a custom client-side authentication mechanism for development purposes, defined in \texttt{src/lib/auth.ts}.
+\begin{itemize}
+    \item \textbf{Storage}: User session data is stored in \texttt{localStorage}.
+    \item \textbf{Role Management}: Simple role checks (e.g., \texttt{isAdmin}) are implemented in \texttt{src/lib/admin-middleware.ts}.
+    \item \textbf{Future Improvement}: Production deployment should migrate to Supabase Auth or NextAuth.js for secure, server-side session handling.
+\end{itemize}
+
+\subsection{Performance Optimization}
+The application implements robust performance strategies in \texttt{src/lib}:
+
+\subsubsection{Caching Strategy}
+An in-memory LRU (Least Recently Used) cache is implemented in \texttt{src/lib/cache.ts} to reduce database load.
+\begin{itemize}
+    \item \textbf{Library}: \texttt{lru-cache}
+    \item \textbf{TTL (Time To Live)}:
+    \begin{itemize}
+        \item Users: 5 minutes
+        \item Posts: 2 minutes
+        \item Comments: 1 minute
+    \end{itemize}
+    \item \textbf{Invalidation}: Smart invalidation logic triggers when content is created, updated, or deleted (e.g., creating a comment invalidates the post's cache).
+\end{itemize}
+
+\subsubsection{Rate Limiting}
+To protect API endpoints from abuse, a Token Bucket algorithm is implemented in \texttt{src/lib/rate-limiter.ts}.
+\begin{itemize}
+    \item \textbf{General API}: 100 requests per minute.
+    \item \textbf{Auth Endpoints}: Strict limit of 10 requests per minute.
+    \item \textbf{Uploads}: 20 uploads per minute.
+    \item \textbf{Posts}: 2 posts per minute to prevent spam.
+\end{itemize}
+
+\subsection{Design System}
+The UI is styled using a comprehensive Tailwind configuration (\texttt{tailwind.config.ts}).
+\begin{itemize}
+    \item \textbf{Theming}: Uses CSS variables (HSL values) for dynamic theming (e.g., Dark Mode support).
+    \item \textbf{Typography}: Standardized on the \textbf{Inter} font family.
+    \item \textbf{Animations}: Custom keyframes for accordion expansions and other micro-interactions.
+\end{itemize}
+
+\section{Project Structure \& Routing}
+The application follows the Next.js App Router convention in \texttt{src/app}:
+
+\begin{itemize}
+    \item \textbf{Public Routes}:
+    \begin{itemize}
+        \item \texttt{/}: Landing page.
+        \item \texttt{/auth/*}: Authentication pages (Login, Register).
+    \end{itemize}
+    \item \textbf{Protected Routes}:
+    \begin{itemize}
+        \item \texttt{/feed}: Main user feed.
+        \item \texttt{/profile}: User profile management.
+        \item \texttt{/network}: Connection management.
+        \item \texttt{/messaging}: Direct messaging interface.
+        \item \texttt{/notifications}: User notifications.
+    \end{itemize}
+    \item \textbf{Admin Routes}:
+    \begin{itemize}
+        \item \texttt{/admin/*}: Administrative dashboard and controls.
+    \end{itemize}
+    \item \textbf{API Routes}:
+    \begin{itemize}
+        \item \texttt{src/app/api/*}: Backend endpoints for data fetching and mutations.
+    \end{itemize}
+\end{itemize}
+
+\begin{lstlisting}[language=bash]
+/Users/harsh/projects/Buconnect
+|-- src/
+|   |-- app/          # Next.js App Router pages
+|   |   |-- admin/    # Admin dashboard
+|   |   |-- api/      # Backend API endpoints
+|   |   |-- auth/     # Authentication pages
+|   |   |-- feed/     # Main feed
+|   |-- components/   # Reusable UI components
+|   |-- lib/          # Utilities
+|   |   |-- cache.ts        # LRU Caching
+|   |   |-- rate-limiter.ts # API Rate Limiting
+|-- prisma/           # Database schema & seed scripts
+|-- public/           # Static assets
+|-- tailwind.config.ts
+|-- next.config.ts
+\end{lstlisting}
+
+\section{Configuration}
+\begin{itemize}
+    \item \textbf{Next.js}: Configured to ignore TypeScript/ESLint errors during builds for rapid iteration. Remote image patterns are whitelisted for \texttt{placehold.co} and \texttt{unsplash.com}.
+    \item \textbf{Scripts}:
+    \begin{itemize}
+        \item \texttt{npm run dev}: Starts the development server with Turbopack.
+        \item \texttt{npm run db:push}: Pushes Prisma schema changes to the database.
+    \end{itemize}
+\end{itemize}
+
+\end{document}

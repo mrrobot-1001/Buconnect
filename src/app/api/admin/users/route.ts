@@ -60,10 +60,22 @@ export async function PATCH(request: NextRequest) {
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
     if (bio !== undefined) updateData.bio = bio;
-    if (course !== undefined) updateData.course = course;
-    if (batch !== undefined) updateData.batch = batch ? parseInt(batch) : null;
-    if (profession !== undefined) updateData.profession = profession;
     if (role !== undefined) updateData.role = role;
+
+    // Handle role-specific fields
+    if (role === 'STUDENT') {
+      if (course !== undefined) updateData.course = course;
+      if (batch !== undefined) {
+        const batchNumber = parseInt(batch);
+        updateData.batch = isNaN(batchNumber) ? null : batchNumber;
+      }
+      updateData.profession = null; // Clear profession for students
+    } else if (role === 'ALUMNI' || role === 'ADMIN') {
+      if (profession !== undefined) updateData.profession = profession;
+      updateData.course = null; // Clear course for alumni/admin
+      updateData.batch = null; // Clear batch for alumni/admin
+    }
+
 
     const { data: user, error } = await supabaseAdmin
       .from('users')
@@ -89,6 +101,30 @@ export async function DELETE(request: NextRequest) {
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    }
+
+    // First, get the user's profile image URL
+    const { data: user, error: fetchError } = await supabaseAdmin
+      .from('users')
+      .select('profile_image')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // If a profile image exists, delete it from storage
+    if (user?.profile_image) {
+      try {
+        const fileName = user.profile_image.split('/').pop();
+        if (fileName) {
+          await supabaseAdmin.storage
+            .from('profile-pictures')
+            .remove([fileName]);
+        }
+      } catch (storageError) {
+        console.error('Error deleting profile image:', storageError);
+        // Don't block user deletion if image deletion fails, just log it
+      }
     }
 
     // Delete user (this will cascade delete posts, comments, likes via foreign keys)

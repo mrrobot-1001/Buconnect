@@ -36,7 +36,9 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json(users);
+    const response = NextResponse.json(users);
+    response.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
+    return response;
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(

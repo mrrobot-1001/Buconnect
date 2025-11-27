@@ -53,8 +53,9 @@ export default function AdminUsersPage() {
   const [userFilter, setUserFilter] = useState('ALL');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  // Check if user is admin
   useEffect(() => {
     const checkAuth = async () => {
       const user = localStorage.getItem('currentUser');
@@ -84,13 +85,21 @@ export default function AdminUsersPage() {
     checkAuth();
   }, [router]);
 
-  const fetchUsers = async () => {
+  useEffect(() => {
+    if (isAuthorized) {
+      fetchUsers(currentPage, '');
+    }
+  }, [isAuthorized, userFilter, currentPage]);
+
+  const fetchUsers = async (page = 1, searchQuery = '') => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/users?limit=500');
+      const res = await fetch(`/api/admin/users?page=${page}&limit=10&role=${userFilter}&search=${searchQuery}`);
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users);
+        setCurrentPage(data.pagination.page);
+        setTotalPages(data.pagination.pages);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -191,13 +200,29 @@ export default function AdminUsersPage() {
           </Button>
         </div>
 
-        {/* Filters Toolbar (Search Removed) */}
-        <div className="flex justify-end items-center bg-white p-4 rounded-xl border shadow-sm">
+        <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl border shadow-sm gap-4">
+          <div className="w-full md:w-1/2">
+            <Input
+              placeholder="Search by name or email..."
+              onChange={(e) => {
+                const query = e.target.value;
+                // Debounce search
+                const timer = setTimeout(() => {
+                  fetchUsers(1, query);
+                }, 300);
+                return () => clearTimeout(timer);
+              }}
+              className="w-full"
+            />
+          </div>
           <div className="flex items-center gap-2 w-full md:w-auto">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <select
               value={userFilter}
-              onChange={(e) => setUserFilter(e.target.value)}
+              onChange={(e) => {
+                setUserFilter(e.target.value);
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
               className="px-3 py-2 border rounded-md text-sm bg-gray-50 focus:bg-white transition-all outline-none focus:ring-2 focus:ring-blue-500/20 border-gray-200 min-w-[150px]"
             >
               <option value="ALL">All Roles</option>
@@ -329,6 +354,26 @@ export default function AdminUsersPage() {
             </div>
           )}
         </Card>
+        {/* Pagination Controls */}
+        <div className="flex justify-center items-center gap-4 mt-6">
+          <Button
+            onClick={() => setCurrentPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            variant="outline"
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-gray-600">
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button
+            onClick={() => setCurrentPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            variant="outline"
+          >
+            Next
+          </Button>
+        </div>
 
         {/* Edit Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>

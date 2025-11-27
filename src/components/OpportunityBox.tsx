@@ -38,6 +38,10 @@ export default function OpportunityBox() {
         };
 
         fetchOpportunities();
+
+        const intervalId = setInterval(fetchOpportunities, 5000); // Poll every 5 seconds
+
+        return () => clearInterval(intervalId); // Cleanup on unmount
     }, []);
 
     if (loading) {
