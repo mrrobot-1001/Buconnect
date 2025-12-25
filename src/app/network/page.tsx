@@ -110,7 +110,7 @@ export default function NetworkPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [currentUser?.id, toast]);
 
     const handleConnect = async (userId: string, userName: string) => {
         if (!currentUser?.id) {
