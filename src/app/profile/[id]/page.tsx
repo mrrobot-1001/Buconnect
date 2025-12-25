@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AppLayout from "@/components/AppLayout";
 import { PostCard } from "@/components/PostCard";
@@ -11,9 +11,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ImageCropper } from "@/components/ImageCropper";
 import type { PostWithAuthor } from "@/lib/definitions";
-import { Mail, Plus, Briefcase, GraduationCap, MapPin, Edit2, UserMinus, Upload, Loader2 } from "lucide-react";
+import { Mail, Plus, Briefcase, GraduationCap, MapPin, Edit2, UserMinus, Upload, Loader2, AlertCircle } from "lucide-react";
 import Image from "next/image";
+import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/contexts/UserContext";
+
+// Constants for image upload
+const MAX_FILE_SIZE_MB = 5; // Max file size before compression
+const MAX_COMPRESSED_SIZE_KB = 500; // Max size after compression
 
 interface UserProfile {
     id: string;
@@ -40,6 +47,8 @@ type ConnectionStatus = 'CONNECTED' | 'PENDING' | 'NOT_CONNECTED';
 export default function ProfilePage() {
     const params = useParams();
     const router = useRouter();
+    const { toast } = useToast();
+    const { currentUser: contextUser, updateUserProfile } = useUser();
     const userId = params?.id as string;
     
     const [user, setUser] = useState<UserProfile | null>(null);
@@ -49,6 +58,10 @@ export default function ProfilePage() {
     const [isOwnProfile, setIsOwnProfile] = useState(false);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
+    
+    // Image cropper state
+    const [cropperOpen, setCropperOpen] = useState(false);
+    const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
     // Edit form state
     const [editForm, setEditForm] = useState({
@@ -207,10 +220,47 @@ export default function ProfilePage() {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            toast({
+                title: "Invalid file type",
+                description: "Please select an image file (JPG, PNG, GIF, etc.)",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        // Validate file size (before compression)
+        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+            toast({
+                title: "File too large",
+                description: `Please select an image smaller than ${MAX_FILE_SIZE_MB}MB`,
+                variant: "destructive",
+            });
+            return;
+        }
+
+        // Create a preview URL and open the cropper
+        const imageUrl = URL.createObjectURL(file);
+        setSelectedImage(imageUrl);
+        setCropperOpen(true);
+        
+        // Reset the input so the same file can be selected again
+        e.target.value = '';
+    };
+
+    const handleCroppedImage = async (croppedBlob: Blob) => {
         try {
             setUploading(true);
+            
+            // Clean up the object URL
+            if (selectedImage) {
+                URL.revokeObjectURL(selectedImage);
+                setSelectedImage(null);
+            }
+
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', croppedBlob, 'profile-picture.jpg');
             formData.append('userId', userId);
 
             const res = await fetch('/api/upload/profile-picture', {
@@ -218,17 +268,39 @@ export default function ProfilePage() {
                 body: formData
             });
 
-            if (!res.ok) throw new Error('Upload failed');
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || 'Upload failed');
+            }
             
             const data = await res.json();
+            
+            // Update local user state
             setUser(prev => prev ? { 
                 ...prev, 
                 profile_image: data.url, 
                 profileImage: data.url 
             } : null);
+
+            // Update context to propagate to all components in real-time
+            if (contextUser?.id === userId) {
+                updateUserProfile({
+                    profile_image: data.url,
+                    profileImage: data.url
+                });
+            }
+
+            toast({
+                title: "Success",
+                description: "Profile picture updated successfully!",
+            });
         } catch (error) {
             console.error('Error uploading profile picture:', error);
-            alert('Failed to upload profile picture');
+            toast({
+                title: "Upload failed",
+                description: error instanceof Error ? error.message : "Failed to upload profile picture",
+                variant: "destructive",
+            });
         } finally {
             setUploading(false);
         }
@@ -252,10 +324,30 @@ export default function ProfilePage() {
             
             const updatedUser = await res.json();
             setUser(updatedUser);
+            
+            // Update context to propagate changes to all components
+            if (contextUser?.id === userId) {
+                updateUserProfile({
+                    name: updatedUser.name,
+                    bio: updatedUser.bio,
+                    course: updatedUser.course,
+                    batch: updatedUser.batch,
+                    profession: updatedUser.profession,
+                });
+            }
+            
             setEditDialogOpen(false);
+            toast({
+                title: "Success",
+                description: "Profile updated successfully!",
+            });
         } catch (error) {
             console.error('Error updating profile:', error);
-            alert('Failed to update profile');
+            toast({
+                title: "Error",
+                description: "Failed to update profile",
+                variant: "destructive",
+            });
         }
     };
 
@@ -499,7 +591,22 @@ export default function ProfilePage() {
                     <h2 className="text-2xl font-bold text-gray-900 mb-6">Activity</h2>
                     <div className="space-y-4">
                         {userPosts.map((post) => (
-                            <PostCard key={post.id} post={post} />
+                            <PostCard 
+                                key={post.id} 
+                                post={post} 
+                                onDelete={(postId) => {
+                                    setUserPosts(prev => prev.filter(p => p.id !== postId));
+                                    if (user) {
+                                        setUser({
+                                            ...user,
+                                            _count: {
+                                                ...user._count,
+                                                posts: Math.max(0, user._count.posts - 1)
+                                            }
+                                        });
+                                    }
+                                }} 
+                            />
                         ))}
                     </div>
                 </div>
@@ -516,6 +623,24 @@ export default function ProfilePage() {
                 </Card>
             )}
            </div>
+
+            {/* Image Cropper Dialog */}
+            {selectedImage && (
+                <ImageCropper
+                    open={cropperOpen}
+                    onClose={() => {
+                        setCropperOpen(false);
+                        if (selectedImage) {
+                            URL.revokeObjectURL(selectedImage);
+                            setSelectedImage(null);
+                        }
+                    }}
+                    imageSrc={selectedImage}
+                    onCropComplete={handleCroppedImage}
+                    aspectRatio={1}
+                    maxSizeKB={MAX_COMPRESSED_SIZE_KB}
+                />
+            )}
         </AppLayout>
     );
 }

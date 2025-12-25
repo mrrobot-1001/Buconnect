@@ -150,11 +150,12 @@ export async function POST(request: Request) {
       .eq('following_id', authorId);
 
     if (connections && connections.length > 0) {
+      const truncatedTitle = title.length > 50 ? title.substring(0, 50) + '...' : title;
       const notifications = connections.map(conn => ({
         user_id: conn.follower_id,
-        type: 'NEW_POST',
+        type: 'new_post',
         title: 'New Post',
-        message: `${post.author.name} posted: ${title}`,
+        message: `${post.author.name} posted: "${truncatedTitle}"`,
         actor_id: authorId,
         link: `/post/${post.id}`,
         read: false

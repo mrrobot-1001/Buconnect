@@ -42,7 +42,7 @@ export async function GET(
       .select('*', { count: 'exact', head: true })
       .eq('follower_id', id);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ...user,
       _count: {
         posts: postsCount || 0,
@@ -50,6 +50,10 @@ export async function GET(
         following: followingCount || 0,
       },
     });
+    
+    // Add cache headers - revalidate every 30 seconds
+    response.headers.set('Cache-Control', 's-maxage=30, stale-while-revalidate=60');
+    return response;
   } catch (error) {
     console.error('Error fetching user:', error);
     return NextResponse.json(

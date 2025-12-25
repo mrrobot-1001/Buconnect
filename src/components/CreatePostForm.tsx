@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Image as ImageIcon, Video, Send } from "lucide-react";
 import { UserAvatar } from "./UserAvatar";
 import { useToast } from "@/hooks/use-toast";
-import type { User } from "@/lib/definitions";
+import { useUser } from "@/contexts/UserContext";
 
 interface CreatePostFormProps {
   onPostCreated?: () => void;
@@ -16,26 +16,14 @@ interface CreatePostFormProps {
 
 export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
   const { toast } = useToast();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { currentUser, isLoading: userLoading } = useUser();
   const [content, setContent] = useState("");
   const [title, setTitle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showImageInput, setShowImageInput] = useState(false);
 
-  useEffect(() => {
-    const userStr = localStorage.getItem('currentUser');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setCurrentUser(user);
-      } catch (e) {
-        console.error('Failed to parse currentUser:', e);
-      }
-    }
-  }, []);
-
-  if (!currentUser) {
+  if (userLoading || !currentUser) {
     return null;
   }
 

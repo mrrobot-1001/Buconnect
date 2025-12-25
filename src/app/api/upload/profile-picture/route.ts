@@ -6,6 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Size limits
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB max input
+const MAX_UPLOAD_SIZE_BYTES = 1 * 1024 * 1024; // 1MB max for actual upload (should be compressed)
+
 // POST - Upload profile picture
 export async function POST(request: Request) {
   try {
@@ -20,9 +24,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create a unique filename
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json(
+        { error: 'Only image files are allowed' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file size (compressed images should be under 1MB)
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: 'File too large. Maximum size is 1MB. Please compress your image.' },
+        { status: 400 }
+      );
+    }
+
+    // Create a unique filename (always save as jpg since we compress to JPEG)
+    const fileName = `${userId}-${Date.now()}.jpg`;
     const filePath = `profile-pictures/${fileName}`;
 
     // Convert file to ArrayBuffer
@@ -33,7 +52,7 @@ export async function POST(request: Request) {
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('avatars')
       .upload(filePath, buffer, {
-        contentType: file.type,
+        contentType: 'image/jpeg',
         upsert: true,
       });
 

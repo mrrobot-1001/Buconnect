@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Briefcase, Loader2, ArrowRight } from "lucide-react";
+import { Briefcase, Loader2, ArrowRight, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { UserAvatar } from "./UserAvatar";
+import { Button } from "./ui/button";
 
 interface Post {
     id: string;
@@ -21,28 +22,40 @@ interface Post {
 export default function OpportunityBox() {
     const [opportunities, setOpportunities] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const fetchOpportunities = useCallback(async (showRefreshIndicator = false) => {
+        if (showRefreshIndicator) {
+            setIsRefreshing(true);
+        }
+        try {
+            const res = await fetch('/api/posts?hashtags=job,internship&limit=5', {
+                cache: 'no-store',
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setOpportunities(data);
+            }
+        } catch (error) {
+            console.error('Error fetching opportunities:', error);
+        } finally {
+            setLoading(false);
+            setIsRefreshing(false);
+        }
+    }, []);
 
     useEffect(() => {
-        const fetchOpportunities = async () => {
-            try {
-                const res = await fetch('/api/posts?hashtags=job,internship&limit=5');
-                if (res.ok) {
-                    const data = await res.json();
-                    setOpportunities(data);
-                }
-            } catch (error) {
-                console.error('Error fetching opportunities:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchOpportunities();
 
-        const intervalId = setInterval(fetchOpportunities, 5000); // Poll every 5 seconds
+        // Poll every 10 seconds for new opportunities
+        const intervalId = setInterval(() => fetchOpportunities(false), 10000);
 
-        return () => clearInterval(intervalId); // Cleanup on unmount
-    }, []);
+        return () => clearInterval(intervalId);
+    }, [fetchOpportunities]);
+
+    const handleRefresh = () => {
+        fetchOpportunities(true);
+    };
 
     if (loading) {
         return (
@@ -58,11 +71,22 @@ export default function OpportunityBox() {
     return (
         <Card className="border-0 shadow-md bg-gradient-to-br from-orange-50 to-amber-50">
             <CardHeader className="p-5 pb-2">
-                <div className="flex items-center gap-2">
-                    <div className="p-2 bg-orange-100 rounded-lg">
-                        <Briefcase className="h-4 w-4 text-orange-600" />
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-orange-100 rounded-lg">
+                            <Briefcase className="h-4 w-4 text-orange-600" />
+                        </div>
+                        <CardTitle className="text-lg text-gray-900">Opportunities</CardTitle>
                     </div>
-                    <CardTitle className="text-lg text-gray-900">Opportunities</CardTitle>
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 rounded-lg hover:bg-orange-100"
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                    >
+                        <RefreshCw className={`h-4 w-4 text-orange-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </Button>
                 </div>
                 <CardDescription className="text-xs text-muted-foreground">
                     Latest jobs & internships

@@ -89,9 +89,11 @@ export default function LoginPage() {
 
         // If email not verified, show option to resend
         if (response.status === 403 && data.error?.includes('verify')) {
+          setResendEmail(email); // Pre-fill the resend email field
+          setShowResendVerification(true);
           toast({
-            title: "Verification Required",
-            description: "Please verify your email. You can request a new link below.",
+            title: "Email Not Verified",
+            description: "Please verify your email before logging in. We've opened the resend verification form for you.",
             variant: "destructive",
           });
         } else {

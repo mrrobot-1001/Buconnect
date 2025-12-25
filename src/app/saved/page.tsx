@@ -4,38 +4,40 @@ import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PostCard } from "@/components/PostCard";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { PostWithAuthor } from "@/lib/definitions";
+import { useUser } from "@/contexts/UserContext";
 
 export default function SavedPostsPage() {
+  const { currentUser } = useUser();
   const [savedPosts, setSavedPosts] = useState<PostWithAuthor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchSavedPosts = async () => {
-      try {
-        setIsLoading(true);
-        const currentUserStr = localStorage.getItem('currentUser');
-        if (!currentUserStr) {
-          setIsLoading(false);
-          return;
-        }
-        
-        const currentUser = JSON.parse(currentUserStr);
-        const response = await fetch(`/api/posts/saved?userId=${currentUser.id}`);
-        if (response.ok) {
-          const data = await response.json();
-          setSavedPosts(data);
-        }
-      } catch (error) {
-        console.error('Error fetching saved posts:', error);
-      } finally {
-        setIsLoading(false);
+  const fetchSavedPosts = useCallback(async () => {
+    if (!currentUser?.id) {
+      setIsLoading(false);
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/posts/saved?userId=${currentUser.id}`, {
+        cache: 'no-store',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSavedPosts(data);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching saved posts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser?.id]);
 
+  useEffect(() => {
     fetchSavedPosts();
-  }, []);
+  }, [fetchSavedPosts]);
 
   if (isLoading) {
     return (
@@ -69,7 +71,13 @@ export default function SavedPostsPage() {
         ) : (
           <div className="space-y-4">
             {savedPosts.map(post => (
-              <PostCard key={post.id} post={post} />
+              <PostCard 
+                key={post.id} 
+                post={post} 
+                onDelete={(postId) => {
+                    setSavedPosts(prev => prev.filter(p => p.id !== postId));
+                }}
+              />
             ))}
           </div>
         )}

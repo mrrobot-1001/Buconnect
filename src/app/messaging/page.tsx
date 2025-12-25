@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Send, MessageSquare, Search, ArrowLeft } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useUser } from "@/contexts/UserContext";
 
 type Message = {
   id: string;
@@ -30,11 +31,11 @@ type Conversation = {
 };
 
 export default function MessagingPage() {
+  const { currentUser } = useUser();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [newMessage, setNewMessage] = useState("");
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -42,30 +43,12 @@ export default function MessagingPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Get current user on mount
-  useEffect(() => {
-    const user = localStorage.getItem('currentUser');
-    if (user) {
-      const parsedUser = JSON.parse(user);
-      setCurrentUserId(parsedUser.id);
-    }
-  }, []);
-
-  // Load conversations when user is set
-  useEffect(() => {
-    if (currentUserId) {
-      loadConversations();
-    }
-  }, [currentUserId]);
-
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
+    if (!currentUser?.id) return;
     try {
-      const res = await fetch(`/api/messages?userId=${currentUserId}&conversations=true`);
+      const res = await fetch(`/api/messages?userId=${currentUser.id}&conversations=true`, {
+        cache: 'no-store',
+      });
       if (res.ok) {
         const data = await res.json();
         setConversations(data);
@@ -73,12 +56,30 @@ export default function MessagingPage() {
     } catch (error) {
       console.error("Failed to load conversations:", error);
     }
-  };
+  }, [currentUser?.id]);
+
+  // Load conversations when user is set
+  useEffect(() => {
+    if (currentUser?.id) {
+      loadConversations();
+      // Poll for new messages every 5 seconds
+      const interval = setInterval(loadConversations, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [currentUser?.id, loadConversations]);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   const loadMessages = async (otherUserId: string) => {
+    if (!currentUser?.id) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/messages?userId=${currentUserId}&otherUserId=${otherUserId}`);
+      const res = await fetch(`/api/messages?userId=${currentUser.id}&otherUserId=${otherUserId}`, {
+        cache: 'no-store',
+      });
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
@@ -91,14 +92,14 @@ export default function MessagingPage() {
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedUser) return;
+    if (!newMessage.trim() || !selectedUser || !currentUser?.id) return;
 
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          senderId: currentUserId,
+          senderId: currentUser.id,
           receiverId: selectedUser.id,
           content: newMessage.trim(),
         }),
@@ -222,18 +223,18 @@ export default function MessagingPage() {
                         {messages.map((message) => (
                           <div
                             key={message.id}
-                            className={`flex ${message.sender_id === currentUserId ? "justify-end" : "justify-start"
+                            className={`flex ${message.sender_id === currentUser?.id ? "justify-end" : "justify-start"
                               }`}
                           >
                             <div
-                              className={`max-w-[70%] rounded-lg p-3 ${message.sender_id === currentUserId
+                              className={`max-w-[70%] rounded-lg p-3 ${message.sender_id === currentUser?.id
                                 ? "bg-primary text-primary-foreground"
                                 : "bg-muted"
                                 }`}
                             >
                               <p>{message.content}</p>
                               <p
-                                className={`text-xs mt-1 ${message.sender_id === currentUserId
+                                className={`text-xs mt-1 ${message.sender_id === currentUser?.id
                                   ? "text-primary-foreground/70"
                                   : "text-muted-foreground"
                                   }`}

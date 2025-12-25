@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/AppLayout";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Search, UserPlus, UserMinus, Loader2, Users } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/contexts/UserContext";
 
 interface User {
     id: string;
@@ -30,27 +31,24 @@ interface ConnectionStatus {
 
 export default function NetworkPage() {
     const router = useRouter();
+    const { currentUser } = useUser();
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState("all");
-    const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({});
     const [connectingUsers, setConnectingUsers] = useState<Set<string>>(new Set());
     const [incomingRequests, setIncomingRequests] = useState<{ [userId: string]: string }>({}); // userId -> requestId
     const { toast } = useToast();
 
-    const fetchUsers = async () => {
+    const fetchUsers = useCallback(async () => {
         try {
-            const user = localStorage.getItem('currentUser');
-            let userId = null;
-
-            if (user) {
-                userId = JSON.parse(user).id;
-            }
+            const userId = currentUser?.id || null;
 
             // Fetch all users
-            const response = await fetch('/api/users');
+            const response = await fetch('/api/users', {
+                next: { revalidate: 60 }
+            });
             if (response.ok) {
                 const data = await response.json();
                 // Filter out current user
@@ -115,7 +113,7 @@ export default function NetworkPage() {
     };
 
     const handleConnect = async (userId: string, userName: string) => {
-        if (!currentUserId) {
+        if (!currentUser?.id) {
             router.push('/register');
             return;
         }
@@ -130,7 +128,7 @@ export default function NetworkPage() {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        sender_id: currentUserId,
+                        sender_id: currentUser.id,
                         recipient_id: userId
                     })
                 });
@@ -150,7 +148,7 @@ export default function NetworkPage() {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        sender_id: currentUserId,
+                        sender_id: currentUser.id,
                         recipient_id: userId
                     })
                 });
@@ -170,7 +168,7 @@ export default function NetworkPage() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        sender_id: currentUserId,
+                        sender_id: currentUser.id,
                         recipient_id: userId
                     })
                 });
@@ -240,14 +238,8 @@ export default function NetworkPage() {
     };
 
     useEffect(() => {
-        // Get current user
-        const user = localStorage.getItem('currentUser');
-        if (user) {
-            const parsedUser = JSON.parse(user);
-            setCurrentUserId(parsedUser.id);
-        }
         fetchUsers();
-    }, []);
+    }, [fetchUsers]);
 
     const filteredUsers = allUsers.filter(user => {
         const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

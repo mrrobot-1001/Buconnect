@@ -6,60 +6,46 @@ import { Separator } from "./ui/separator";
 import { Bookmark, Rss, Users } from "lucide-react";
 import Link from "next/link";
 import { Button } from "./ui/button";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-
-interface CurrentUser {
-  id: string;
-  name: string;
-  email: string;
-  role: 'STUDENT' | 'ALUMNI' | 'ADMIN';
-  bio?: string;
-  profileImage?: string;
-  course?: string;
-  profession?: string;
-}
+import { useUser } from "@/contexts/UserContext";
 
 export default function LeftSidebar() {
   const router = useRouter();
   const pathname = usePathname();
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const { currentUser, isLoading: userLoading } = useUser();
   const [connections, setConnections] = useState(0);
   const [profileViews, setProfileViews] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        // Get current user from localStorage
-        const userStr = localStorage.getItem('currentUser');
-        if (!userStr) {
-          setIsLoading(false);
-          return;
-        }
+  const loadUserStats = useCallback(async () => {
+    if (!currentUser?.id) {
+      setIsLoading(false);
+      return;
+    }
 
-        const user = JSON.parse(userStr);
-        setCurrentUser(user);
-
-        // Fetch full user profile data from API
-        const userRes = await fetch(`/api/users/${user.id}`);
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          setCurrentUser(userData);
-          setConnections(userData._count?.following || 0);
-          setProfileViews(userData.profile_views || 0);
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-      } finally {
-        setIsLoading(false);
+    try {
+      // Fetch user stats from API
+      const userRes = await fetch(`/api/users/${currentUser.id}`, {
+        next: { revalidate: 60 } // Cache for 60 seconds
+      });
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        setConnections(userData._count?.following || 0);
+        setProfileViews(userData.profile_views || 0);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUser?.id]);
 
-    loadUserData();
-  }, []);
+  useEffect(() => {
+    loadUserStats();
+  }, [loadUserStats]);
 
-  if (!currentUser) {
+  if (userLoading || !currentUser) {
     return null;
   }
 

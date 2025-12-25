@@ -80,7 +80,13 @@ export default function SinglePostPage() {
                         </Link>
                     </Button>
                 </div>
-                <PostCard post={post} />
+                <PostCard 
+                    post={post} 
+                    onDelete={() => {
+                        // Navigate back to feed after deletion
+                        router.push('/feed');
+                    }} 
+                />
             </div>
         </AppLayout>
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { UserAvatar } from "./UserAvatar";
@@ -8,7 +8,7 @@ import { UserPlus, Check, Loader2, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter, usePathname } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
+import { useUser } from "@/contexts/UserContext";
 import OpportunityBox from "./OpportunityBox";
 
 interface RecommendedUser {
@@ -29,20 +29,16 @@ export default function RightSidebar() {
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
-  const currentUser = getCurrentUser();
+  const { currentUser } = useUser();
 
-  useEffect(() => {
-    if (currentUser && pathname === '/network') {
-      fetchRecommendedUsers();
-    }
-  }, [currentUser, pathname]);
-
-  const fetchRecommendedUsers = async () => {
+  const fetchRecommendedUsers = useCallback(async () => {
     if (!currentUser) return;
 
     try {
       // Fetch all users
-      const response = await fetch('/api/users');
+      const response = await fetch('/api/users', {
+        next: { revalidate: 60 }
+      });
       if (!response.ok) return;
 
       const allUsers = await response.json();
@@ -80,7 +76,13 @@ export default function RightSidebar() {
     } catch (error) {
       console.error('Error fetching recommended users:', error);
     }
-  };
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser && pathname === '/network') {
+      fetchRecommendedUsers();
+    }
+  }, [currentUser, pathname, fetchRecommendedUsers]);
 
   const handleConnect = async (userId: string, userName: string) => {
     if (!currentUser) {

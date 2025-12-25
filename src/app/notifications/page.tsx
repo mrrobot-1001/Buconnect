@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatar } from "@/components/UserAvatar";
-import { Bell, Check, X, Trash2, UserPlus, UserCheck, MessageCircle } from "lucide-react";
+import { Bell, Check, X, Trash2, UserPlus, UserCheck, MessageCircle, FileText } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrentUser } from "@/lib/auth";
@@ -172,12 +172,16 @@ export default function NotificationsPage() {
   };
 
   const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'CONNECTION_REQUEST':
+    const normalizedType = type.toLowerCase();
+    switch (normalizedType) {
+      case 'connection_request':
         return <UserPlus className="h-5 w-5 text-blue-500" />;
-      case 'CONNECTION_ACCEPTED':
+      case 'connection_accepted':
         return <UserCheck className="h-5 w-5 text-green-500" />;
-      case 'MESSAGE':
+      case 'new_post':
+        return <FileText className="h-5 w-5 text-orange-500" />;
+      case 'new_message':
+      case 'message':
         return <MessageCircle className="h-5 w-5 text-purple-500" />;
       default:
         return <Bell className="h-5 w-5 text-gray-500" />;
@@ -185,8 +189,9 @@ export default function NotificationsPage() {
   };
 
   const filteredNotifications = notifications.filter(n => {
+    const normalizedType = n.type.toLowerCase();
     if (activeTab === "unread") return !n.read;
-    if (activeTab === "requests") return n.type === "CONNECTION_REQUEST";
+    if (activeTab === "requests") return normalizedType === "connection_request";
     return true;
   });
 

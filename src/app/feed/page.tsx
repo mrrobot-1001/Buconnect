@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
 import { CreatePostForm } from "@/components/CreatePostForm";
 import { PostCard } from "@/components/PostCard";
@@ -11,11 +11,7 @@ export default function FeedPage() {
   const [posts, setPosts] = useState<PostWithAuthor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchPosts();
-  }, []);
-
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
       const response = await fetch('/api/posts');
       if (response.ok) {
@@ -27,11 +23,20 @@ export default function FeedPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
 
   const handlePostCreated = () => {
     // Refresh posts after creating a new one
     fetchPosts();
+  };
+
+  const handlePostDeleted = (postId: string) => {
+    // Remove the deleted post from the list without refetching
+    setPosts(prevPosts => prevPosts.filter(p => p.id !== postId));
   };
 
   return (
@@ -50,7 +55,7 @@ export default function FeedPage() {
             </Card>
           ) : posts.length > 0 ? (
             posts.map((post) => (
-              <PostCard key={post.id} post={post} />
+              <PostCard key={post.id} post={post} onDelete={handlePostDeleted} />
             ))
           ) : (
             <Card className="border-0 shadow-md bg-gradient-to-br from-blue-50 to-indigo-50">

@@ -12,12 +12,14 @@ import { Separator } from "./ui/separator";
 import { mockComments, mockUsers } from "@/lib/mock-data";
 import { Comment } from "./Comment";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Input } from "./ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/contexts/UserContext";
 
 type Props = {
   post: PostWithAuthor;
+  onDelete?: (postId: string) => void;
 };
 
 type CommentType = {
@@ -29,23 +31,13 @@ type CommentType = {
   author: { id: string; name: string; profileImage: string | null };
 };
 
-export function PostCard({ post }: Props) {
+export function PostCard({ post, onDelete }: Props) {
   const { toast } = useToast();
-  const [currentUserFromStorage, setCurrentUserFromStorage] = useState<any>(null);
+  const { currentUser: currentUserFromContext } = useUser();
 
-  useEffect(() => {
-    // Get current user from localStorage
-    if (typeof window !== 'undefined') {
-      const userStr = localStorage.getItem('currentUser');
-      if (userStr) {
-        setCurrentUserFromStorage(JSON.parse(userStr));
-      }
-    }
-  }, []);
-
-  const currentUser = currentUserFromStorage || mockUsers[1]; // Fallback to mock if needed
-  const isAuthor = currentUserFromStorage?.id === post.author.id;
-  const canComment = currentUserFromStorage?.id !== post.author.id;
+  const currentUser = currentUserFromContext || mockUsers[1]; // Fallback to mock if needed
+  const isAuthor = currentUserFromContext?.id === post.author.id;
+  const canComment = currentUserFromContext?.id !== post.author.id;
 
   const [likes, setLikes] = useState(post._count?.likes || 0);
   const [isLiked, setIsLiked] = useState(false);
@@ -140,8 +132,10 @@ export function PostCard({ post }: Props) {
         description: "Post deleted successfully",
       });
 
-      // Optionally refresh the page or remove the post from the list
-      window.location.reload();
+      // Call the onDelete callback to remove post from list
+      if (onDelete) {
+        onDelete(post.id);
+      }
     } catch (error) {
       console.error('Error deleting post:', error);
       toast({

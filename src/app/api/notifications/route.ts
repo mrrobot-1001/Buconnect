@@ -6,6 +6,15 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+// Helper function to check if a date is within the last 24 hours
+const isWithin24Hours = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const hours = diff / (1000 * 60 * 60);
+  return hours <= 24;
+};
+
 // GET - Fetch notifications for a user
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -17,6 +26,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // First, delete old post notifications (more than 24 hours)
+    const oneDayAgo = new Date();
+    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+    
+    // Delete old notifications for both lowercase and uppercase types
+    await supabaseAdmin
+      .from('notifications')
+      .delete()
+      .eq('user_id', userId)
+      .in('type', ['new_post', 'NEW_POST'])
+      .lt('created_at', oneDayAgo.toISOString());
+
     let query = supabaseAdmin
       .from('notifications')
       .select(`
@@ -39,7 +60,16 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    return NextResponse.json(data || []);
+    // Filter out post notifications older than 24 hours (double-check in case delete failed)
+    const filteredData = (data || []).filter(notification => {
+      const isPostNotification = notification.type === 'new_post' || notification.type === 'NEW_POST';
+      if (isPostNotification) {
+        return isWithin24Hours(notification.created_at);
+      }
+      return true; // Keep all other notification types
+    });
+
+    return NextResponse.json(filteredData);
   } catch (error) {
     console.error('Error fetching notifications:', error);
     return NextResponse.json({ error: 'Failed to fetch notifications' }, { status: 500 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Bell, Check, X, UserPlus, UserCheck, MessageCircle, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import { UserAvatar } from "./UserAvatar";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { getCurrentUser } from "@/lib/auth";
+import { useUser } from "@/contexts/UserContext";
 import { useRouter } from "next/navigation";
 
 interface Notification {
@@ -43,22 +43,15 @@ export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
-  const currentUser = getCurrentUser();
+  const { currentUser } = useUser();
 
-  useEffect(() => {
-    if (currentUser) {
-      fetchNotifications();
-      // Poll for new notifications every 30 seconds
-      const interval = setInterval(fetchNotifications, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [currentUser]);
-
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!currentUser) return;
 
     try {
-      const response = await fetch(`/api/notifications?userId=${currentUser.id}`);
+      const response = await fetch(`/api/notifications?userId=${currentUser.id}`, {
+        cache: 'no-store',
+      });
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
@@ -67,7 +60,16 @@ export function NotificationBell() {
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
-  };
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchNotifications();
+      // Poll for new notifications every 30 seconds
+      const interval = setInterval(fetchNotifications, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [currentUser, fetchNotifications]);
 
   const markAsRead = async (notificationIds: string[]) => {
     try {
@@ -169,14 +171,16 @@ export function NotificationBell() {
   };
 
   const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'CONNECTION_REQUEST':
+    const normalizedType = type.toLowerCase();
+    switch (normalizedType) {
+      case 'connection_request':
         return <UserPlus className="h-4 w-4 text-blue-500" />;
-      case 'CONNECTION_ACCEPTED':
+      case 'connection_accepted':
         return <UserCheck className="h-4 w-4 text-green-500" />;
-      case 'NEW_POST':
+      case 'new_post':
         return <FileText className="h-4 w-4 text-orange-500" />;
-      case 'MESSAGE':
+      case 'new_message':
+      case 'message':
         return <MessageCircle className="h-4 w-4 text-purple-500" />;
       default:
         return <Bell className="h-4 w-4 text-gray-500" />;

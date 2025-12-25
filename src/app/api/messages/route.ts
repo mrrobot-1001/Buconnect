@@ -194,6 +194,27 @@ export async function POST(request: Request) {
       );
     }
 
+    // Create a notification for the recipient
+    try {
+      const senderName = message.sender?.name || 'Someone';
+      const truncatedContent = content.length > 50 ? content.substring(0, 50) + '...' : content;
+      
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: receiverId,
+          type: 'new_message',
+          title: 'New Message',
+          message: `${senderName} sent you a message: "${truncatedContent}"`,
+          link: `/messaging?user=${senderId}`,
+          actor_id: senderId,
+          read: false,
+        });
+    } catch (notifError) {
+      console.error('Error creating message notification:', notifError);
+      // Don't fail the message send if notification fails
+    }
+
     return NextResponse.json(message, { status: 201 });
   } catch (error) {
     console.error('Error in messages POST:', error);

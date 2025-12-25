@@ -9,7 +9,20 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
   },
+  // Optimize for Vercel deployment
+  poweredByHeader: false,
+  compress: true,
+  
+  // Enable experimental features for better performance
+  experimental: {
+    // Optimize package imports
+    optimizePackageImports: ['lucide-react', 'date-fns', '@supabase/supabase-js'],
+  },
+
   images: {
+    // Use Vercel's image optimization
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 60,
     remotePatterns: [
       {
         protocol: 'https',
@@ -29,12 +42,47 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-      // Add your Supabase hostname here for image optimization
-      // {
-      //   protocol: 'https',
-      //   hostname: '*.supabase.co',
-      // },
+      // Supabase storage
+      {
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        port: '',
+        pathname: '/**',
+      },
     ],
+  },
+
+  // Headers for security and caching
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'origin-when-cross-origin',
+          },
+        ],
+      },
+      // Cache static assets
+      {
+        source: '/images/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
   },
 };
 

@@ -21,7 +21,10 @@ import {
   Mail,
   GraduationCap,
   Briefcase,
-  Calendar
+  Calendar,
+  CheckCircle,
+  XCircle,
+  RefreshCw
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -42,6 +45,8 @@ interface User {
   batch?: number;
   profession?: string;
   created_at: string;
+  email_verified?: boolean;
+  email_confirmed_at?: string | null;
 }
 
 export default function AdminUsersPage() {
@@ -118,11 +123,33 @@ export default function AdminUsersPage() {
       if (res.ok) {
         setUsers(users.filter(u => u.id !== userId));
       } else {
-        alert('Failed to delete user');
+        const data = await res.json();
+        alert(data.error || 'Failed to delete user');
       }
     } catch (error) {
       console.error('Error deleting user:', error);
       alert('Error deleting user');
+    }
+  };
+
+  const handleResendVerification = async (userId: string, userName: string) => {
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, action: 'resend-verification' })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        alert(`Verification email sent to ${userName}`);
+      } else {
+        alert(data.error || 'Failed to send verification email');
+      }
+    } catch (error) {
+      console.error('Error sending verification email:', error);
+      alert('Error sending verification email');
     }
   };
 
@@ -241,6 +268,7 @@ export default function AdminUsersPage() {
                 <tr className="bg-gray-50/50 border-b">
                   <th className="text-left py-4 px-6 font-semibold text-sm text-gray-600">User</th>
                   <th className="text-left py-4 px-6 font-semibold text-sm text-gray-600">Role</th>
+                  <th className="text-left py-4 px-6 font-semibold text-sm text-gray-600">Verified</th>
                   <th className="text-left py-4 px-6 font-semibold text-sm text-gray-600">Course</th>
                   <th className="text-left py-4 px-6 font-semibold text-sm text-gray-600">Batch</th>
                   <th className="text-left py-4 px-6 font-semibold text-sm text-gray-600">Profession</th>
@@ -278,6 +306,19 @@ export default function AdminUsersPage() {
                       >
                         {user.role}
                       </Badge>
+                    </td>
+                    <td className="py-4 px-6">
+                      {user.email_verified ? (
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-sm text-green-600 font-medium">Verified</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <XCircle className="h-4 w-4 text-red-500" />
+                          <span className="text-sm text-red-600 font-medium">Not Verified</span>
+                        </div>
+                      )}
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-600">
                       {user.role === 'STUDENT' ? (
@@ -329,6 +370,13 @@ export default function AdminUsersPage() {
                             <Edit2 className="h-4 w-4 mr-2" />
                             Edit Details
                           </DropdownMenuItem>
+                          {!user.email_verified && (
+                            <DropdownMenuItem onClick={() => handleResendVerification(user.id, user.name)}>
+                              <RefreshCw className="h-4 w-4 mr-2" />
+                              Resend Verification
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-red-600 focus:text-red-600"
                             onClick={() => handleDeleteUser(user.id, user.name)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -10,44 +10,47 @@ import { Home, LogOut, Settings, User as UserIcon, Users, MessageSquare, Shield,
 import Link from "next/link";
 import { UserAvatar } from "./UserAvatar";
 import { NotificationBell } from "./NotificationBell";
-import { getCurrentUser, clearCurrentUser } from "@/lib/auth";
+import { useUser } from "@/contexts/UserContext";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const currentUser = getCurrentUser();
+  const { currentUser, setCurrentUser, isLoading } = useUser();
   const [stats, setStats] = useState({ connections: 0, profileViews: 0 });
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      if (currentUser?.id) {
-        try {
-          const res = await fetch(`/api/users/${currentUser.id}`);
-          if (res.ok) {
-            const data = await res.json();
-            setStats({
-              connections: data._count?.following || 0,
-              profileViews: data.profile_views || 0
-            });
-          }
-        } catch (error) {
-          console.error('Error fetching stats:', error);
+  const fetchStats = useCallback(async () => {
+    if (currentUser?.id) {
+      try {
+        const res = await fetch(`/api/users/${currentUser.id}`, {
+          next: { revalidate: 60 } // Cache for 60 seconds
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setStats({
+            connections: data._count?.following || 0,
+            profileViews: data.profile_views || 0
+          });
         }
+      } catch (error) {
+        console.error('Error fetching stats:', error);
       }
-    };
-    fetchStats();
+    }
   }, [currentUser?.id]);
 
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
   const handleLogout = () => {
-    clearCurrentUser();
+    setCurrentUser(null);
     router.push('/');
   };
 
   const isAdminPage = pathname.startsWith('/admin');
 
-  if (!currentUser) {
+  if (isLoading || !currentUser) {
     return null;
   }
 
