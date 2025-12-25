@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     // Get counts for each user
     const usersWithCounts = await Promise.all(
-      users.map(async (user) => {
+      (users || []).map(async (user: any) => {
         const { count: postsCount } = await supabaseAdmin
           .from('posts')
           .select('*', { count: 'exact', head: true })
