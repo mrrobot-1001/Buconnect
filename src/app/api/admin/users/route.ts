@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch email verification status from Supabase Auth for each user
     const usersWithVerification = await Promise.all(
-      (users || []).map(async (user) => {
+      (users || []).map(async (user: any) => {
         try {
           const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
           return {
@@ -99,8 +99,8 @@ export async function PATCH(request: NextRequest) {
       updateData.batch = null; // Clear batch for alumni/admin
     }
 
-    const { data: user, error } = await supabaseAdmin
-      .from("users")
+    const { data: user, error } = await (supabaseAdmin
+      .from("users") as any)
       .update(updateData)
       .eq("id", id)
       .select()
@@ -141,9 +141,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     // If a profile image exists, delete it from storage
-    if (user?.profile_image) {
+    if ((user as any)?.profile_image) {
       try {
-        const fileName = user.profile_image.split("/").pop();
+        const fileName = (user as any).profile_image.split("/").pop();
         if (fileName) {
           await supabaseAdmin.storage
             .from("profile-pictures")
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
       
       // Use inviteUserByEmail which sends an email with a magic link
       // This works for existing users who haven't verified their email
-      const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(user.email, {
+      const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail((user as any).email, {
         redirectTo: `${origin}/auth/callback`,
       });
 
@@ -232,8 +232,8 @@ export async function POST(request: NextRequest) {
         
         // Alternative: Generate a signup link 
         const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-          type: "signup",
-          email: user.email,
+          type: "magiclink",
+          email: (user as any).email,
           options: {
             redirectTo: `${origin}/auth/callback`,
           },

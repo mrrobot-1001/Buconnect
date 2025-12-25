@@ -64,13 +64,13 @@ export async function POST(request: NextRequest) {
       { count: followersCount },
       { count: followingCount }
     ] = await Promise.all([
-      supabaseAdmin.from('posts').select('*', { count: 'exact', head: true }).eq('author_id', user.id),
-      supabaseAdmin.from('connections').select('*', { count: 'exact', head: true }).eq('following_id', user.id),
-      supabaseAdmin.from('connections').select('*', { count: 'exact', head: true }).eq('follower_id', user.id),
+      supabaseAdmin.from('posts').select('*', { count: 'exact', head: true }).eq('author_id', (user as any).id),
+      supabaseAdmin.from('connections').select('*', { count: 'exact', head: true }).eq('following_id', (user as any).id),
+      supabaseAdmin.from('connections').select('*', { count: 'exact', head: true }).eq('follower_id', (user as any).id),
     ]);
 
     // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
+    const { password: _, ...userWithoutPassword } = user as any;
 
     return NextResponse.json({
       ...userWithoutPassword,

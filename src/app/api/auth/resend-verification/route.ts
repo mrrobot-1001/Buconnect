@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is already verified
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById((user as any).id);
     
     if (authUser?.user?.email_confirmed_at) {
       return NextResponse.json({ 

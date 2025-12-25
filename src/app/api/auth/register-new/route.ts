@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         batch: batch || null,
         profession: profession || null,
         bio: bio || null,
-      })
+      } as any)
       .select()
       .single();
 
@@ -99,10 +99,10 @@ export async function POST(request: NextRequest) {
         message:
           "Registration successful! Please check your email to verify your account.",
         user: {
-          id: newUser.id,
-          email: newUser.email,
-          name: newUser.name,
-          role: newUser.role,
+          id: (newUser as any).id,
+          email: (newUser as any).email,
+          name: (newUser as any).name,
+          role: (newUser as any).role,
           emailVerified: false,
         },
       },

@@ -60,12 +60,12 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Post ID required' }, { status: 400 });
     }
 
-    const updateData: any = {};
+    const updateData: Record<string, any> = {};
     if (title !== undefined) updateData.title = title;
     if (content !== undefined) updateData.content = content;
 
-    const { data: post, error } = await supabaseAdmin
-      .from('posts')
+    const { data: post, error } = await (supabaseAdmin
+      .from('posts') as any)
       .update(updateData)
       .eq('id', id)
       .select()

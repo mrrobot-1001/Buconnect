@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
         content,
         image_url: imageUrl || null,
         author_id: authorId,
-      })
+      } as any)
       .select(`
         *,
         author:users!posts_author_id_fkey (
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        ...newPost,
+        ...(newPost as any),
         _count: {
           likes: 0,
           comments: 0,

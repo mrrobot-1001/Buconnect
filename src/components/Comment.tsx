@@ -8,6 +8,7 @@ type Props = {
 }
 
 export function Comment({ comment }: Props) {
+    const createdAt = comment.createdAt || comment.created_at;
     return (
         <div className="flex gap-3">
             <Link href={`/profile/${comment.author.id}`}>
@@ -18,7 +19,7 @@ export function Comment({ comment }: Props) {
                     <Link href={`/profile/${comment.author.id}`}>
                         <p className="text-xs font-semibold hover:underline">{comment.author.name}</p>
                     </Link>
-                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</p>
+                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(createdAt), { addSuffix: true })}</p>
                 </div>
                 <p className="text-sm mt-1">{comment.text}</p>
             </div>

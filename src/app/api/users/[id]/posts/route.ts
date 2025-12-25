@@ -41,7 +41,7 @@ export async function GET(
 
     // Get counts for likes and comments
     const postsWithCounts = await Promise.all(
-      (posts || []).map(async (post) => {
+      (posts || []).map(async (post: any) => {
         const { count: likesCount } = await supabase
           .from('likes')
           .select('*', { count: 'exact', head: true })

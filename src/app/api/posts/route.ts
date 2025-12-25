@@ -61,7 +61,7 @@ export async function GET(request: Request) {
 
     // Get counts for likes and comments
     const postsWithCounts = await Promise.all(
-      (posts || []).map(async (post) => {
+      (posts || []).map(async (post: any) => {
         const { count: likesCount } = await supabase
           .from('likes')
           .select('*', { count: 'exact', head: true })
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
 
     if (connections && connections.length > 0) {
       const truncatedTitle = title.length > 50 ? title.substring(0, 50) + '...' : title;
-      const notifications = connections.map(conn => ({
+      const notifications = connections.map((conn: any) => ({
         user_id: conn.follower_id,
         type: 'new_post',
         title: 'New Post',

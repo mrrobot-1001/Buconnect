@@ -67,7 +67,7 @@ export async function POST(request: Request) {
         batch: batchValue,
         profession,
         created_at: new Date().toISOString(),
-      },
+      } as any,
       { onConflict: "id" },
     );
 
