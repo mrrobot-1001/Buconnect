@@ -9,9 +9,10 @@ const supabase = createClient(
 // GET user's posts
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { data: posts, error } = await supabase
       .from('posts')
       .select(`
@@ -27,7 +28,7 @@ export async function GET(
           profession
         )
       `)
-      .eq('author_id', params.id)
+      .eq('author_id', id)
       .order('created_at', { ascending: false });
 
     if (error) {

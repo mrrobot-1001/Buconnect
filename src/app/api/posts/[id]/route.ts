@@ -9,9 +9,10 @@ const supabase = createClient(
 // GET single post
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { data: post, error } = await supabase
       .from('posts')
       .select(`
@@ -35,7 +36,7 @@ export async function GET(
           )
         )
       `)
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error || !post) {
@@ -75,13 +76,14 @@ export async function GET(
 // DELETE post
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { error } = await supabase
       .from('posts')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (error) {
       console.error('Error deleting post:', error);
@@ -104,9 +106,10 @@ export async function DELETE(
 // PATCH update post
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { title, content, imageUrl } = await request.json();
 
     const updateData: any = {};
@@ -117,7 +120,7 @@ export async function PATCH(
     const { data: post, error } = await supabase
       .from('posts')
       .update(updateData)
-      .eq('id', params.id)
+      .eq('id', id)
       .select(`
         *,
         author:users!posts_author_id_fkey (

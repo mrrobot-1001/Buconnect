@@ -9,9 +9,10 @@ const supabase = createClient(
 // GET comments for a post
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { data: comments, error } = await supabase
       .from('comments')
       .select(`
@@ -23,7 +24,7 @@ export async function GET(
           role
         )
       `)
-      .eq('post_id', params.id)
+      .eq('post_id', id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -47,9 +48,10 @@ export async function GET(
 // POST create comment
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { text, authorId } = await request.json();
 
     if (!text || !authorId) {
@@ -64,7 +66,7 @@ export async function POST(
       .insert({
         text,
         author_id: authorId,
-        post_id: params.id,
+        post_id: id,
       })
       .select(`
         *,

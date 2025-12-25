@@ -9,9 +9,10 @@ const supabase = createClient(
 // POST toggle like on a post
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { userId } = await request.json();
 
     if (!userId) {
@@ -25,7 +26,7 @@ export async function POST(
     const { data: existingLike } = await supabase
       .from('likes')
       .select('id')
-      .eq('post_id', params.id)
+      .eq('post_id', id)
       .eq('user_id', userId)
       .single();
 
@@ -45,7 +46,7 @@ export async function POST(
       await supabase
         .from('likes')
         .insert({
-          post_id: params.id,
+          post_id: id,
           user_id: userId,
         });
 
