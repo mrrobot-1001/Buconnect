@@ -47,7 +47,8 @@ export default function NetworkPage() {
 
             // Fetch all users
             const response = await fetch('/api/users', {
-                next: { revalidate: 60 }
+                next: { revalidate: 60 },
+                credentials: 'include',
             });
             if (response.ok) {
                 const data = await response.json();
@@ -58,7 +59,9 @@ export default function NetworkPage() {
                 // Fetch connection requests for current user
                 if (userId) {
                     try {
-                        const requestsRes = await fetch(`/api/connections/requests?userId=${userId}`);
+                        const requestsRes = await fetch(`/api/connections/requests?userId=${userId}`, {
+                            credentials: 'include',
+                        });
                         if (requestsRes.ok) {
                             const { incoming, outgoing } = await requestsRes.json();
                             const statusMap: ConnectionStatus = {};
@@ -71,24 +74,24 @@ export default function NetworkPage() {
 
                             // Update status based on outgoing requests
                             outgoing.forEach((req: any) => {
-                                if (statusMap.hasOwnProperty(req.following_id)) {
+                                if (statusMap.hasOwnProperty(req.followingId)) {
                                     if (req.status === 'ACCEPTED') {
-                                        statusMap[req.following_id] = 'CONNECTED';
+                                        statusMap[req.followingId] = 'CONNECTED';
                                     } else if (req.status === 'PENDING') {
-                                        statusMap[req.following_id] = 'PENDING';
+                                        statusMap[req.followingId] = 'PENDING';
                                     }
                                 }
                             });
 
                             // Also check incoming accepted requests
                             incoming.forEach((req: any) => {
-                                if (req.status === 'ACCEPTED' && statusMap.hasOwnProperty(req.follower_id)) {
-                                    statusMap[req.follower_id] = 'CONNECTED';
+                                if (req.status === 'ACCEPTED' && statusMap.hasOwnProperty(req.followerId)) {
+                                    statusMap[req.followerId] = 'CONNECTED';
                                 }
                                 // If incoming request is pending, store requestId
-                                if (req.status === 'PENDING' && statusMap.hasOwnProperty(req.follower_id)) {
-                                    incomingMap[req.follower_id] = req.id;
-                                    statusMap[req.follower_id] = 'INCOMING_PENDING';
+                                if (req.status === 'PENDING' && statusMap.hasOwnProperty(req.followerId)) {
+                                    incomingMap[req.followerId] = req.id;
+                                    statusMap[req.followerId] = 'INCOMING_PENDING';
                                 }
                             });
 
@@ -127,9 +130,9 @@ export default function NetworkPage() {
                 const res = await fetch('/api/connections/requests', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({
-                        sender_id: currentUser.id,
-                        recipient_id: userId
+                        recipientId: userId
                     })
                 });
 
@@ -147,9 +150,9 @@ export default function NetworkPage() {
                 const res = await fetch('/api/connections/requests', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({
-                        sender_id: currentUser.id,
-                        recipient_id: userId
+                        recipientId: userId
                     })
                 });
 
@@ -167,9 +170,9 @@ export default function NetworkPage() {
                 const res = await fetch('/api/connections/requests', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({
-                        sender_id: currentUser.id,
-                        recipient_id: userId
+                        recipientId: userId
                     })
                 });
 
@@ -206,6 +209,7 @@ export default function NetworkPage() {
             const res = await fetch('/api/connections/requests', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ requestId, status: 'ACCEPTED' })
             });
             if (res.ok) {
@@ -225,6 +229,7 @@ export default function NetworkPage() {
             const res = await fetch('/api/connections/requests', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ requestId, status: 'REJECTED' })
             });
             if (res.ok) {

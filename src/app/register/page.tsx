@@ -22,9 +22,11 @@ import { Building2, Mail, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth/client";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { register } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [registrationComplete, setRegistrationComplete] = useState(false);
@@ -44,26 +46,12 @@ export default function RegisterPage() {
   const handleResendVerification = async () => {
     setIsResending(true);
     try {
-      const response = await fetch("/api/auth/resend-verification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: registeredEmail }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        toast({
-          title: "Error",
-          description: data.error || "Failed to resend verification email",
-          variant: "destructive",
-        });
-        return;
-      }
-
+      // Note: This would need a resend-verification endpoint
+      // For now, we'll just show a message
       toast({
-        title: "Email Sent",
-        description: "Verification email has been resent. Please check your inbox.",
+        title: "Feature not implemented",
+        description: "Please use the login page to resend verification",
+        variant: "destructive",
       });
     } catch (error) {
       console.error("Resend error:", error);
@@ -92,28 +80,21 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/register-new", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-          role: formData.role,
-          course: formData.course || null,
-          batch: formData.batch ? parseInt(formData.batch) : null,
-          profession: formData.profession || null,
-        }),
+      const result = await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role as 'STUDENT' | 'ALUMNI' | 'ADMIN',
+        course: formData.course || undefined,
+        batch: formData.batch ? parseInt(formData.batch) : undefined,
+        profession: formData.profession || undefined,
+        bio: undefined,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
+      if (!result.success) {
         toast({
           title: "Error",
-          description: data.error || "Registration failed",
+          description: result.error || "Registration failed",
           variant: "destructive",
         });
         return;
@@ -382,13 +363,6 @@ export default function RegisterPage() {
                 Login
               </Link>
             </div>
-
-            {/* <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-xs text-blue-900 font-semibold mb-2">✨ Admin Demo Account</p>
-              <p className="text-xs text-blue-800">Email: <code className="bg-white px-2 py-1 rounded">priya.s@example.com</code></p>
-              <p className="text-xs text-blue-800">Password: <code className="bg-white px-2 py-1 rounded">password123</code></p>
-              <p className="text-xs text-blue-700 mt-2">Try logging in with the admin account to access the admin dashboard!</p>
-            </div> */}
           </CardContent>
         </Card>
       </div>

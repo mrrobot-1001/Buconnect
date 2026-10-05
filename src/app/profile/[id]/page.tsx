@@ -17,6 +17,7 @@ import { Mail, Plus, Briefcase, GraduationCap, MapPin, Edit2, UserMinus, Upload,
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/lib/auth/client";
 
 // Constants for image upload
 const MAX_FILE_SIZE_MB = 5; // Max file size before compression
@@ -49,6 +50,7 @@ export default function ProfilePage() {
     const router = useRouter();
     const { toast } = useToast();
     const { currentUser: contextUser, updateUserProfile } = useUser();
+    const { user: authUser } = useAuth();
     const userId = params?.id as string;
     
     const [user, setUser] = useState<UserProfile | null>(null);
@@ -75,13 +77,14 @@ export default function ProfilePage() {
     useEffect(() => {
         const fetchUserData = async () => {
             try {
-                // Get current user from localStorage
-                const currentUserStr = localStorage.getItem('currentUser');
-                const currentUserId = currentUserStr ? JSON.parse(currentUserStr).id : null;
+                // Get current user from auth context
+                const currentUserId = authUser?.id || null;
                 setIsOwnProfile(currentUserId === userId);
 
                 // Fetch user profile
-                const userRes = await fetch(`/api/users/${userId}`);
+                const userRes = await fetch(`/api/users/${userId}`, {
+                  credentials: 'include',
+                });
                 if (!userRes.ok) throw new Error('Failed to fetch user');
                 const userData = await userRes.json();
                 setUser(userData);
@@ -96,21 +99,25 @@ export default function ProfilePage() {
                 });
 
                 // Fetch user posts
-                const postsRes = await fetch(`/api/users/${userId}/posts`);
+                const postsRes = await fetch(`/api/users/${userId}/posts`, {
+                  credentials: 'include',
+                });
                 if (!postsRes.ok) throw new Error('Failed to fetch posts');
                 const postsData = await postsRes.json();
-                setUserPosts(postsData);
+                setUserPosts(postsData.posts || []);
 
                 // Check connection status (only if not own profile)
                 if (currentUserId && currentUserId !== userId) {
                     try {
-                        const requestsRes = await fetch(`/api/connections/requests?userId=${currentUserId}`);
+                        const requestsRes = await fetch(`/api/connections/requests?userId=${currentUserId}`, {
+                          credentials: 'include',
+                        });
                         if (requestsRes.ok) {
                             const { incoming, outgoing } = await requestsRes.json();
                             
                             // Check outgoing requests (sent by current user to this user)
                             const outgoingToThisUser = outgoing.find(
-                                (r: any) => r.following_id === userId
+                                (r: any) => r.followingId === userId
                             );
                             
                             if (outgoingToThisUser) {
@@ -123,7 +130,7 @@ export default function ProfilePage() {
                             
                             // Also check incoming requests (sent by this user to current user)
                             const incomingFromThisUser = incoming.find(
-                                (r: any) => r.follower_id === userId
+                                (r: any) => r.followerId === userId
                             );
                             
                             if (incomingFromThisUser && incomingFromThisUser.status === 'ACCEPTED') {
@@ -144,26 +151,23 @@ export default function ProfilePage() {
         if (userId) {
             fetchUserData();
         }
-    }, [userId]);
+    }, [userId, authUser?.id]);
 
     const handleConnect = async () => {
+        if (!authUser) {
+            router.push('/');
+            return;
+        }
+
         try {
-            const currentUserStr = localStorage.getItem('currentUser');
-            if (!currentUserStr) {
-                router.push('/');
-                return;
-            }
-
-            const currentUserId = JSON.parse(currentUserStr).id;
-
             if (connectionStatus === 'PENDING') {
                 // Cancel pending request
                 const res = await fetch('/api/connections/requests', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ 
-                        sender_id: currentUserId,
-                        recipient_id: userId 
+                        recipientId: userId 
                     })
                 });
 
@@ -175,9 +179,9 @@ export default function ProfilePage() {
                 const res = await fetch('/api/connections/requests', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ 
-                        sender_id: currentUserId,
-                        recipient_id: userId 
+                        recipientId: userId 
                     })
                 });
 
@@ -187,23 +191,24 @@ export default function ProfilePage() {
             }
         } catch (error) {
             console.error('Error toggling connection:', error);
-            alert('Failed to send connection request');
+            toast({
+                title: "Error",
+                description: "Failed to send connection request",
+                variant: "destructive",
+            });
         }
     };
 
     const handleDisconnect = async () => {
+        if (!authUser) return;
+
         try {
-            const currentUserStr = localStorage.getItem('currentUser');
-            if (!currentUserStr) return;
-
-            const currentUserId = JSON.parse(currentUserStr).id;
-
             const res = await fetch('/api/connections/requests', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ 
-                    sender_id: currentUserId,
-                    recipient_id: userId 
+                    recipientId: userId 
                 })
             });
 
@@ -212,7 +217,11 @@ export default function ProfilePage() {
             }
         } catch (error) {
             console.error('Error disconnecting:', error);
-            alert('Failed to disconnect');
+            toast({
+                title: "Error",
+                description: "Failed to disconnect",
+                variant: "destructive",
+            });
         }
     };
 

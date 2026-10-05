@@ -99,12 +99,15 @@ export default function AdminUsersPage() {
   const fetchUsers = async (page = 1, searchQuery = '') => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/admin/users?page=${page}&limit=10&role=${userFilter}&search=${searchQuery}`);
+      const offset = (page - 1) * 10;
+      const res = await fetch(`/api/admin/users?offset=${offset}&limit=10&role=${userFilter}&search=${searchQuery}`, {
+        credentials: 'include',
+      });
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users);
-        setCurrentPage(data.pagination.page);
-        setTotalPages(data.pagination.pages);
+        setCurrentPage(page);
+        setTotalPages(Math.ceil(data.total / 10));
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -119,7 +122,10 @@ export default function AdminUsersPage() {
     }
 
     try {
-      const res = await fetch(`/api/admin/users?id=${userId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/users?id=${userId}`, { 
+        method: 'DELETE',
+        credentials: 'include',
+      });
       if (res.ok) {
         setUsers(users.filter(u => u.id !== userId));
       } else {
@@ -137,6 +143,7 @@ export default function AdminUsersPage() {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ userId, action: 'resend-verification' })
       });
       
@@ -158,8 +165,9 @@ export default function AdminUsersPage() {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          id: user.id,
+          userId: user.id,
           name: user.name,
           course: user.course,
           batch: user.batch,

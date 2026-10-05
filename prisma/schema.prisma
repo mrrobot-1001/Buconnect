@@ -22,11 +22,18 @@ model User {
   batch        Int?
   profession   String?
   createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   posts        Post[]
   comments     Comment[]
   likes        Like[]
   following    Connection[] @relation("Following")
   followers    Connection[] @relation("Followed")
+  notifications Notification[]
+  sentConnectionRequests     ConnectionRequest[] @relation("RequestFollower")
+  receivedConnectionRequests ConnectionRequest[] @relation("RequestFollowing")
+  actorNotifications Notification[] @relation("NotificationActor")
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
 }
 
 model Post {
@@ -72,8 +79,59 @@ model Connection {
   @@unique([followerId, followingId])
 }
 
+model ConnectionRequest {
+  id          String              @id @default(cuid())
+  follower    User                @relation("RequestFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  followerId  String
+  following   User                @relation("RequestFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+  followingId String
+  status      ConnectionStatus    @default(PENDING)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([followerId, followingId])
+}
+
+model Message {
+  id           String   @id @default(cuid())
+  content      String   @db.Text
+  sender       User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  senderId     String
+  recipient    User     @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+  recipientId  String
+  read         Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([senderId, recipientId])
+  @@index([recipientId, read])
+}
+
 enum Role {
   STUDENT
   ALUMNI
   ADMIN
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  type      String
+  title     String
+  message   String
+  actor     User?    @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId   String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }

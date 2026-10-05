@@ -9,7 +9,7 @@ import { Button } from "./ui/button";
 import { MessageCircle, ThumbsUp, MoreHorizontal, Send } from "lucide-react";
 import Image from "next/image";
 import { Separator } from "./ui/separator";
-import { mockComments, mockUsers } from "@/lib/mock-data";
+import { mockUsers } from "@/lib/mock-data";
 import { Comment } from "./Comment";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { useState } from "react";
@@ -27,8 +27,8 @@ type CommentType = {
   text: string;
   authorId: string;
   postId: string;
-  createdAt: Date;
-  author: { id: string; name: string; profileImage: string | null };
+  createdAt: string;
+  author: { id: string; name: string; profileImage: string | null; role: string };
 };
 
 export function PostCard({ post, onDelete }: Props) {
@@ -40,30 +40,69 @@ export function PostCard({ post, onDelete }: Props) {
   const canComment = currentUserFromContext?.id !== post.author.id;
 
   const [likes, setLikes] = useState(post._count?.likes || 0);
-  const [isLiked, setIsLiked] = useState(false);
+  const [isLiked, setIsLiked] = useState(post.isLiked || false);
   const [showComments, setShowComments] = useState(false);
-  const [comments, setComments] = useState<CommentType[]>(
-    mockComments.filter(c => c.postId === post.id) as CommentType[]
-  );
+  const [comments, setComments] = useState<CommentType[]>([]);
   const [commentText, setCommentText] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    setLikes(isLiked ? likes - 1 : likes + 1);
-    toast({
-      title: isLiked ? "Unliked" : "Liked",
-      description: isLiked ? "Post removed from your likes" : "Post added to your likes",
-    });
+  // Fetch comments on mount
+  useState(() => {
+    if (post.id) {
+      fetch(`/api/posts/${post.id}/comments`, { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => setComments(data.comments || []))
+        .catch(err => console.error('Error fetching comments:', err));
+    }
+  });
+
+  const handleLike = async () => {
+    if (isLiking || !currentUserFromContext) return;
+    
+    setIsLiking(true);
+    const wasLiked = isLiked;
+    
+    try {
+      setIsLiked(!wasLiked);
+      setLikes(wasLiked ? likes - 1 : likes + 1);
+
+      const response = await fetch(`/api/posts/${post.id}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to like post');
+      }
+      
+      toast({
+        title: wasLiked ? "Unliked" : "Liked",
+        description: wasLiked ? "Post removed from your likes" : "Post added to your likes",
+      });
+    } catch (error) {
+      // Revert on error
+      setIsLiked(wasLiked);
+      setLikes(wasLiked ? likes + 1 : likes - 1);
+      console.error('Error liking post:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update like",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLiking(false);
+    }
   };
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!commentText.trim()) {
+    if (!commentText.trim() || !currentUserFromContext) {
       toast({
         title: "Error",
-        description: "Comment cannot be empty",
+        description: "Please log in to comment",
         variant: "destructive",
       });
       return;
@@ -72,31 +111,26 @@ export function PostCard({ post, onDelete }: Props) {
     setIsSubmittingComment(true);
 
     try {
-      // Simulate API call
-      setTimeout(() => {
-        const newComment: CommentType = {
-          id: `comment${Date.now()}`,
-          text: commentText.trim(),
-          authorId: currentUser.id,
-          postId: post.id,
-          createdAt: new Date(),
-          author: {
-            id: currentUser.id,
-            name: currentUser.name,
-            profileImage: currentUser.profileImage || null,
-          },
-        };
+      const response = await fetch(`/api/posts/${post.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ text: commentText.trim() }),
+      });
 
-        setComments([newComment, ...comments]);
-        setCommentText('');
+      if (!response.ok) {
+        throw new Error('Failed to post comment');
+      }
 
-        toast({
-          title: "Success",
-          description: "Comment posted successfully",
-        });
+      const newComment = await response.json();
+      
+      setComments([newComment, ...comments]);
+      setCommentText('');
 
-        setIsSubmittingComment(false);
-      }, 500);
+      toast({
+        title: "Success",
+        description: "Comment posted successfully",
+      });
     } catch (error) {
       console.error('Error posting comment:', error);
       toast({
@@ -104,6 +138,7 @@ export function PostCard({ post, onDelete }: Props) {
         description: "Failed to post comment",
         variant: "destructive",
       });
+    } finally {
       setIsSubmittingComment(false);
     }
   };
@@ -121,6 +156,7 @@ export function PostCard({ post, onDelete }: Props) {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       });
 
       if (!response.ok) {

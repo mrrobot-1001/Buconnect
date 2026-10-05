@@ -1,94 +1,88 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { supabaseAdmin } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { hashPassword, setSession } from '@/lib/auth/server';
+import { applyRateLimit, authLimiter } from '@/lib/rate-limiter';
+import { z } from 'zod';
 
-// Use the public anon key for sign-up to ensure verification email is sent
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+const registerSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  role: z.enum(['STUDENT', 'ALUMNI', 'ADMIN']).optional(),
+  course: z.string().optional(),
+  batch: z.number().int().optional(),
+  profession: z.string().optional(),
+  bio: z.string().optional(),
+});
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const rateLimitResponse = await applyRateLimit(request, authLimiter);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
-    const { name, email, password, role, course, batch, profession } =
-      await request.json();
-
-    if (!name || !email || !password) {
+    const body = await request.json();
+    
+    // Validate input
+    const validation = registerSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { error: "Name, email, and password are required" },
-        { status: 400 },
+        { error: validation.error.errors[0].message },
+        { status: 400 }
       );
     }
 
-    // Sign up with Supabase Auth
-    const { data, error } = await supabase.auth.signUp({
-      email: email.toLowerCase().trim(),
-      password,
-      options: {
-        data: {
-          name,
-          role: role || "STUDENT",
-          course,
-          batch: batch ? parseInt(batch) : null,
-          profession,
-        },
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+    const { name, email, password, role, course, batch, profession, bio } = validation.data;
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'User with this email already exists' },
+        { status: 409 }
+      );
+    }
+
+    // Hash password
+    const hashedPassword = await hashPassword(password);
+
+    // Create user
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email: email.toLowerCase().trim(),
+        password: hashedPassword,
+        role: role || 'STUDENT',
+        course: course || null,
+        batch: batch || null,
+        profession: profession || null,
+        bio: bio || null,
       },
     });
 
-    if (error) {
-      console.error("Supabase Auth error:", error);
-      return NextResponse.json(
-        { error: error.message || "Registration failed" },
-        { status: 400 },
-      );
-    }
+    // Create session
+    await setSession({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
 
-    if (!data.user) {
-      return NextResponse.json(
-        { error: "Registration failed" },
-        { status: 500 },
-      );
-    }
-
-    // MANUAL SYNC: Ensure user exists in public.users
-    // This allows registration to work even if the database trigger is disabled/broken
-    const userRole = (role || "STUDENT") as "STUDENT" | "ALUMNI" | "ADMIN";
-    const batchValue = batch ? parseInt(batch) : null;
-
-    const { error: syncError } = await supabaseAdmin.from("users").upsert(
-      {
-        id: data.user.id,
-        email: email.toLowerCase().trim(),
-        name,
-        role: userRole,
-        password: "managed_by_supabase_auth",
-        course,
-        batch: batchValue,
-        profession,
-        created_at: new Date().toISOString(),
-      } as any,
-      { onConflict: "id" },
-    );
-
-    if (syncError) {
-      console.error("Manual sync warning:", syncError);
-      // We don't fail the request here, as the auth user was created successfully
-    }
-
+    // Return user data (without password)
+    const { password: _, ...userWithoutPassword } = user;
     return NextResponse.json(
       {
-        user: data.user,
-        message:
-          "Registration successful. Please check your email to verify your account.",
+        user: userWithoutPassword,
+        message: 'Registration successful',
       },
-      { status: 201 },
+      { status: 201 }
     );
   } catch (error) {
-    console.error("Registration error:", error);
+    console.error('Registration error:', error);
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
+      { error: 'Internal server error' },
+      { status: 500 }
     );
   }
 }

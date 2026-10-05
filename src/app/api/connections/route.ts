@@ -1,16 +1,12 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getCurrentUser, requireAuth } from '@/lib/auth/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// GET - Get user's connections (followers/following)
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const currentUser = await getCurrentUser();
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const userId = searchParams.get('userId') || currentUser?.id;
     const type = searchParams.get('type'); // 'followers' or 'following'
 
     if (!userId) {
@@ -21,71 +17,96 @@ export async function GET(request: Request) {
     }
 
     if (type === 'followers') {
-      // Get users who follow this user
-      const { data: connections, error } = await supabase
-        .from('connections')
-        .select(`
-          follower_id,
-          follower:users!connections_follower_id_fkey (
-            id,
-            name,
-            email,
-            profile_image,
-            role,
-            course,
-            batch,
-            profession,
-            bio
-          )
-        `)
-        .eq('following_id', userId);
+      const connections = await prisma.connection.findMany({
+        where: { followingId: userId },
+        include: {
+          follower: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              profileImage: true,
+              role: true,
+              course: true,
+              batch: true,
+              profession: true,
+              bio: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
 
-      if (error) {
-        console.error('Error fetching followers:', error);
-        return NextResponse.json(
-          { error: 'Failed to fetch followers' },
-          { status: 500 }
-        );
+      // Check if current user is following each follower
+      let followingIds = new Set<string>();
+      if (currentUser) {
+        const following = await prisma.connection.findMany({
+          where: {
+            followerId: currentUser.id,
+            followingId: { in: connections.map(c => c.follower.id) },
+          },
+          select: { followingId: true },
+        });
+        followingIds = new Set(following.map(f => f.followingId));
       }
 
-      return NextResponse.json(connections?.map(c => c.follower) || []);
+      const users = connections.map(c => ({
+        ...c.follower,
+        isFollowing: followingIds.has(c.follower.id),
+      }));
+
+      return NextResponse.json(users);
     } else if (type === 'following') {
-      // Get users this user follows
-      const { data: connections, error } = await supabase
-        .from('connections')
-        .select(`
-          following_id,
-          following:users!connections_following_id_fkey (
-            id,
-            name,
-            email,
-            profile_image,
-            role,
-            course,
-            batch,
-            profession,
-            bio
-          )
-        `)
-        .eq('follower_id', userId);
+      const connections = await prisma.connection.findMany({
+        where: { followerId: userId },
+        include: {
+          following: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              profileImage: true,
+              role: true,
+              course: true,
+              batch: true,
+              profession: true,
+              bio: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
 
-      if (error) {
-        console.error('Error fetching following:', error);
-        return NextResponse.json(
-          { error: 'Failed to fetch following' },
-          { status: 500 }
-        );
+      // Check if current user is following each following
+      let followingIds = new Set<string>();
+      if (currentUser) {
+        const following = await prisma.connection.findMany({
+          where: {
+            followerId: currentUser.id,
+            followingId: { in: connections.map(c => c.following.id) },
+          },
+          select: { followingId: true },
+        });
+        followingIds = new Set(following.map(f => f.followingId));
       }
 
-      return NextResponse.json(connections?.map(c => c.following) || []);
+      const users = connections.map(c => ({
+        ...c.following,
+        isFollowing: followingIds.has(c.following.id),
+      }));
+
+      return NextResponse.json(users);
     } else {
-      return NextResponse.json(
-        { error: 'type must be "followers" or "following"' },
-        { status: 400 }
-      );
+      // Return both counts
+      const [followersCount, followingCount] = await Promise.all([
+        prisma.connection.count({ where: { followingId: userId } }),
+        prisma.connection.count({ where: { followerId: userId } }),
+      ]);
+
+      return NextResponse.json({ followersCount, followingCount });
     }
   } catch (error) {
-    console.error('Error in connections GET:', error);
+    console.error('Error fetching connections:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -93,32 +114,47 @@ export async function GET(request: Request) {
   }
 }
 
-// POST - Create a connection (follow a user)
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { followerId, followingId } = await request.json();
+    const currentUser = await requireAuth();
+    const body = await request.json();
+    const { followingId } = body;
 
-    if (!followerId || !followingId) {
+    if (!followingId) {
       return NextResponse.json(
-        { error: 'followerId and followingId are required' },
+        { error: 'followingId is required' },
         { status: 400 }
       );
     }
 
-    if (followerId === followingId) {
+    if (currentUser.id === followingId) {
       return NextResponse.json(
         { error: 'Cannot follow yourself' },
         { status: 400 }
       );
     }
 
-    // Check if connection already exists
-    const { data: existing } = await supabase
-      .from('connections')
-      .select('id')
-      .eq('follower_id', followerId)
-      .eq('following_id', followingId)
-      .single();
+    const targetUser = await prisma.user.findUnique({
+      where: { id: followingId },
+      select: { id: true },
+    });
+
+    if (!targetUser) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if already following
+    const existing = await prisma.connection.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId: currentUser.id,
+          followingId,
+        },
+      },
+    });
 
     if (existing) {
       return NextResponse.json(
@@ -128,29 +164,34 @@ export async function POST(request: Request) {
     }
 
     // Create connection
-    const { data: connection, error } = await supabase
-      .from('connections')
-      .insert({
-        follower_id: followerId,
-        following_id: followingId,
-      })
-      .select()
-      .single();
+    const connection = await prisma.connection.create({
+      data: {
+        followerId: currentUser.id,
+        followingId,
+      },
+    });
 
-    if (error) {
-      console.error('Error creating connection:', error);
-      return NextResponse.json(
-        { error: 'Failed to create connection' },
-        { status: 500 }
-      );
-    }
+    // Create notification for followed user
+    await prisma.notification.create({
+      data: {
+        userId: followingId,
+        type: 'follow',
+        title: 'New Follower',
+        message: `${currentUser.name} started following you`,
+        actorId: currentUser.id,
+        link: `/profile/${currentUser.id}`,
+      },
+    });
 
     return NextResponse.json(
       { message: 'Connection created successfully', connection },
       { status: 201 }
     );
   } catch (error) {
-    console.error('Error in connections POST:', error);
+    console.error('Error creating connection:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -158,50 +199,55 @@ export async function POST(request: Request) {
   }
 }
 
-// DELETE - Remove a connection (unfollow a user)
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const currentUser = await requireAuth();
     const { searchParams } = new URL(request.url);
-    let followerId = searchParams.get('followerId');
     let followingId = searchParams.get('followingId');
 
     // Support both query params and request body
-    if (!followerId || !followingId) {
+    if (!followingId) {
       try {
         const body = await request.json();
-        followerId = body.followerId;
         followingId = body.followingId;
       } catch {
         // If no body, continue with query params
       }
     }
 
-    if (!followerId || !followingId) {
+    if (!followingId) {
       return NextResponse.json(
-        { error: 'followerId and followingId are required' },
+        { error: 'followingId is required' },
         { status: 400 }
       );
     }
 
-    const { error } = await supabase
-      .from('connections')
-      .delete()
-      .eq('follower_id', followerId)
-      .eq('following_id', followingId);
+    const connection = await prisma.connection.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId: currentUser.id,
+          followingId,
+        },
+      },
+    });
 
-    if (error) {
-      console.error('Error deleting connection:', error);
+    if (!connection) {
       return NextResponse.json(
-        { error: 'Failed to delete connection' },
-        { status: 500 }
+        { error: 'Connection not found' },
+        { status: 404 }
       );
     }
 
-    return NextResponse.json(
-      { message: 'Connection removed successfully' }
-    );
+    await prisma.connection.delete({
+      where: { id: connection.id },
+    });
+
+    return NextResponse.json({ message: 'Connection removed successfully' });
   } catch (error) {
-    console.error('Error in connections DELETE:', error);
+    console.error('Error deleting connection:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

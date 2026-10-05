@@ -1,151 +1,125 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// GET - Get messages for a conversation
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const currentUser = await requireAuth();
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
     const otherUserId = searchParams.get('otherUserId');
-    const conversations = searchParams.get('conversations'); // Get list of conversations
+    const conversations = searchParams.get('conversations') === 'true';
 
-    if (conversations === 'true' && userId) {
-      // Get all connected users for this user
-      const { data: connections, error: connectionError } = await supabase
-        .from('connection_requests')
-        .select(`
-          *,
-          follower:users!connection_requests_follower_id_fkey (id, name, profile_image),
-          following:users!connection_requests_following_id_fkey (id, name, profile_image)
-        `)
-        .or(`follower_id.eq.${userId},following_id.eq.${userId}`)
-        .eq('status', 'ACCEPTED');
+    if (conversations) {
+      // Get all conversations for the current user
+      // Find all users who have exchanged messages with current user
+      const messages = await prisma.message.findMany({
+        where: {
+          OR: [
+            { senderId: currentUser.id },
+            { recipientId: currentUser.id },
+          ],
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              profileImage: true,
+            },
+          },
+          recipient: {
+            select: {
+              id: true,
+              name: true,
+              profileImage: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
 
-      if (connectionError) {
-        console.error('Error fetching connections:', connectionError);
-        // Don't return error, just continue without connections
-      } else {
-        console.log(`Found ${connections?.length || 0} connections for user ${userId}`);
-        if (connections && connections.length > 0) {
-          console.log('Sample connection:', JSON.stringify(connections[0], null, 2));
-        }
-      }
+      // Group by conversation partner
+      const conversationMap = new Map<string, {
+        user: { id: string; name: string; profileImage: string | null };
+        lastMessage: string;
+        lastMessageAt: string;
+        unreadCount: number;
+      }>();
 
-      // Get all messages for a user
-      const { data: messages, error } = await supabase
-        .from('messages')
-        .select(`
-          *,
-          sender:users!messages_sender_id_fkey (id, name, profile_image),
-          recipient:users!messages_recipient_id_fkey (id, name, profile_image)
-        `)
-        .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
-        .order('created_at', { ascending: false });
+      for (const msg of messages) {
+        const otherUser = msg.senderId === currentUser.id ? msg.recipient : msg.sender;
+        const otherUserId = otherUser.id;
 
-      if (error) {
-        console.error('Error fetching conversations:', error);
-        return NextResponse.json(
-          { error: 'Failed to fetch conversations' },
-          { status: 500 }
-        );
-      }
-
-      // Group messages by conversation
-      const conversationsMap = new Map();
-
-      // First, add all connected users to the map
-      connections?.forEach((conn: any) => {
-        const otherUser = conn.follower_id === userId ? conn.following : conn.follower;
-        if (otherUser && !conversationsMap.has(otherUser.id)) {
-          conversationsMap.set(otherUser.id, {
+        if (!conversationMap.has(otherUserId)) {
+          conversationMap.set(otherUserId, {
             user: otherUser,
-            lastMessage: 'No messages yet',
-            lastMessageAt: conn.created_at,
+            lastMessage: msg.content,
+            lastMessageAt: msg.createdAt.toISOString(),
             unreadCount: 0,
           });
         }
-      });
 
-      // Then, update with actual message data
-      messages?.forEach((msg: any) => {
-        const otherId = msg.sender_id === userId ? msg.recipient_id : msg.sender_id;
-        const otherUser = msg.sender_id === userId ? msg.recipient : msg.sender;
-
-        if (!conversationsMap.has(otherId)) {
-          // This user isn't in connections, but we have messages with them
-          conversationsMap.set(otherId, {
-            user: otherUser,
-            lastMessage: msg.content,
-            lastMessageAt: msg.created_at,
-            unreadCount: msg.recipient_id === userId && !msg.read ? 1 : 0,
-          });
-        } else {
-          // Update existing conversation with latest message
-          const existing = conversationsMap.get(otherId);
-
-          // Since messages are sorted by created_at DESC, the first message we encounter is the latest
-          if (existing.lastMessage === 'No messages yet') {
-            existing.lastMessage = msg.content;
-            existing.lastMessageAt = msg.created_at;
-          }
-
-          // Count unread messages
-          if (msg.recipient_id === userId && !msg.read) {
-            existing.unreadCount++;
-          }
+        // Count unread messages (received by current user and not read)
+        if (msg.recipientId === currentUser.id && !msg.read) {
+          const conv = conversationMap.get(otherUserId)!;
+          conv.unreadCount += 1;
         }
+      }
+
+      const conversationsList = Array.from(conversationMap.values()).sort(
+        (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+      );
+
+      return NextResponse.json(conversationsList);
+    }
+
+    if (otherUserId) {
+      // Get messages between current user and other user
+      const messages = await prisma.message.findMany({
+        where: {
+          OR: [
+            { senderId: currentUser.id, recipientId: otherUserId },
+            { senderId: otherUserId, recipientId: currentUser.id },
+          ],
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              profileImage: true,
+            },
+          },
+          recipient: {
+            select: {
+              id: true,
+              name: true,
+              profileImage: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
       });
 
-      // Sort by last message time (most recent first)
-      const sortedConversations = Array.from(conversationsMap.values()).sort((a, b) =>
-        new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
-      );
+      // Mark messages as read
+      await prisma.message.updateMany({
+        where: {
+          senderId: otherUserId,
+          recipientId: currentUser.id,
+          read: false,
+        },
+        data: { read: true },
+      });
 
-      return NextResponse.json(sortedConversations);
+      return NextResponse.json(messages);
     }
 
-    if (!userId || !otherUserId) {
-      return NextResponse.json(
-        { error: 'userId and otherUserId are required' },
-        { status: 400 }
-      );
-    }
-
-    // Get messages between two users
-    const { data: messages, error } = await supabase
-      .from('messages')
-      .select(`
-        *,
-        sender:users!messages_sender_id_fkey (id, name, profile_image),
-        recipient:users!messages_recipient_id_fkey (id, name, profile_image)
-      `)
-      .or(`and(sender_id.eq.${userId},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${userId})`)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching messages:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch messages' },
-        { status: 500 }
-      );
-    }
-
-    // Mark messages as read
-    await supabase
-      .from('messages')
-      .update({ read: true })
-      .eq('recipient_id', userId)
-      .eq('sender_id', otherUserId)
-      .eq('read', false);
-
-    return NextResponse.json(messages || []);
+    return NextResponse.json({ error: 'otherUserId or conversations=true required' }, { status: 400 });
   } catch (error) {
-    console.error('Error in messages GET:', error);
+    console.error('Error fetching messages:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -153,108 +127,75 @@ export async function GET(request: Request) {
   }
 }
 
-// POST - Send a message
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const { senderId, receiverId, content } = await request.json();
+    const currentUser = await requireAuth();
+    const body = await request.json();
+    const { recipientId, content } = body;
 
-    if (!senderId || !receiverId || !content) {
+    if (!recipientId || !content) {
       return NextResponse.json(
-        { error: 'senderId, receiverId, and content are required' },
+        { error: 'recipientId and content are required' },
         { status: 400 }
       );
     }
 
-    if (senderId === receiverId) {
+    // Check if recipient exists
+    const recipient = await prisma.user.findUnique({
+      where: { id: recipientId },
+      select: { id: true },
+    });
+
+    if (!recipient) {
       return NextResponse.json(
-        { error: 'Cannot send message to yourself' },
-        { status: 400 }
+        { error: 'Recipient not found' },
+        { status: 404 }
       );
     }
 
-    const { data: message, error } = await supabase
-      .from('messages')
-      .insert({
-        sender_id: senderId,
-        recipient_id: receiverId,
+    // Create message
+    const message = await prisma.message.create({
+      data: {
         content,
-      })
-      .select(`
-        *,
-        sender:users!messages_sender_id_fkey (id, name, profile_image),
-        recipient:users!messages_recipient_id_fkey (id, name, profile_image)
-      `)
-      .single();
+        senderId: currentUser.id,
+        recipientId,
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            name: true,
+            profileImage: true,
+          },
+        },
+        recipient: {
+          select: {
+            id: true,
+            name: true,
+            profileImage: true,
+          },
+        },
+      },
+    });
 
-    if (error) {
-      console.error('Error sending message:', error);
-      return NextResponse.json(
-        { error: 'Failed to send message' },
-        { status: 500 }
-      );
-    }
-
-    // Create a notification for the recipient
-    try {
-      const senderName = message.sender?.name || 'Someone';
-      const truncatedContent = content.length > 50 ? content.substring(0, 50) + '...' : content;
-      
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: receiverId,
-          type: 'new_message',
-          title: 'New Message',
-          message: `${senderName} sent you a message: "${truncatedContent}"`,
-          link: `/messaging?user=${senderId}`,
-          actor_id: senderId,
-          read: false,
-        });
-    } catch (notifError) {
-      console.error('Error creating message notification:', notifError);
-      // Don't fail the message send if notification fails
-    }
+    // Create notification for recipient
+    await prisma.notification.create({
+      data: {
+        userId: recipientId,
+        type: 'new_message',
+        title: 'New Message',
+        message: `${currentUser.name} sent you a message`,
+        actorId: currentUser.id,
+        link: `/messaging`,
+      },
+    });
 
     return NextResponse.json(message, { status: 201 });
   } catch (error) {
-    console.error('Error in messages POST:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-// PATCH - Mark messages as read
-export async function PATCH(request: Request) {
-  try {
-    const { userId, otherUserId } = await request.json();
-
-    if (!userId || !otherUserId) {
-      return NextResponse.json(
-        { error: 'userId and otherUserId are required' },
-        { status: 400 }
-      );
+    console.error('Error sending message:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { error } = await supabase
-      .from('messages')
-      .update({ read: true })
-      .eq('recipient_id', userId)
-      .eq('sender_id', otherUserId)
-      .eq('read', false);
-
-    if (error) {
-      console.error('Error marking messages as read:', error);
-      return NextResponse.json(
-        { error: 'Failed to mark messages as read' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ message: 'Messages marked as read' });
-  } catch (error) {
-    console.error('Error in messages PATCH:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

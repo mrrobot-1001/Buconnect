@@ -24,16 +24,16 @@ interface Notification {
   message: string;
   link: string | null;
   read: boolean;
-  created_at: string;
+  createdAt: string;
   actor?: {
     id: string;
     name: string;
-    profile_image: string | null;
+    profileImage: string | null;
     role: string;
   };
   metadata?: {
-    request_id?: string;
-    connection_id?: string;
+    requestId?: string;
+    connectionId?: string;
   };
 }
 
@@ -49,13 +49,14 @@ export function NotificationBell() {
     if (!currentUser) return;
 
     try {
-      const response = await fetch(`/api/notifications?userId=${currentUser.id}`, {
+      const response = await fetch('/api/notifications', {
         cache: 'no-store',
+        credentials: 'include',
       });
       if (response.ok) {
         const data = await response.json();
-        setNotifications(data);
-        setUnreadCount(data.filter((n: Notification) => !n.read).length);
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -76,7 +77,8 @@ export function NotificationBell() {
       const response = await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationIds }),
+        credentials: 'include',
+        body: JSON.stringify({ notificationId: notificationIds[0] }),
       });
 
       if (response.ok) {
@@ -99,7 +101,8 @@ export function NotificationBell() {
       const response = await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, markAllAsRead: true }),
+        credentials: 'include',
+        body: JSON.stringify({ read: true }),
       });
 
       if (response.ok) {
@@ -119,6 +122,7 @@ export function NotificationBell() {
       const response = await fetch('/api/connections/requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ requestId, status: 'ACCEPTED' }),
       });
 
@@ -145,6 +149,7 @@ export function NotificationBell() {
       const response = await fetch('/api/connections/requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ requestId, status: 'REJECTED' }),
       });
 
@@ -255,22 +260,22 @@ export function NotificationBell() {
                         {notification.message}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        {formatDistanceToNow(new Date(notification.created_at), {
+                        {formatDistanceToNow(new Date(notification.createdAt), {
                           addSuffix: true,
                         })}
                       </p>
 
                       {/* Connection Request Actions */}
-                      {notification.type === 'CONNECTION_REQUEST' &&
+                      {notification.type === 'connection_request' &&
                         !notification.read &&
-                        notification.metadata?.request_id && (
+                        notification.metadata?.requestId && (
                           <div className="flex gap-2 mt-3">
                             <Button
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleAcceptRequest(
-                                  notification.metadata!.request_id!,
+                                  notification.metadata!.requestId!,
                                   notification.id
                                 );
                               }}
@@ -285,7 +290,7 @@ export function NotificationBell() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleRejectRequest(
-                                  notification.metadata!.request_id!,
+                                  notification.metadata!.requestId!,
                                   notification.id
                                 );
                               }}

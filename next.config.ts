@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
   // Enable experimental features for better performance
   experimental: {
     // Optimize package imports
-    optimizePackageImports: ['lucide-react', 'date-fns', '@supabase/supabase-js'],
+    optimizePackageImports: ['lucide-react', 'date-fns'],
   },
 
   images: {
@@ -36,13 +36,6 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'picsum.photos',
-        port: '',
-        pathname: '/**',
-      },
-      // Supabase storage
-      {
-        protocol: 'https',
-        hostname: '*.supabase.co',
         port: '',
         pathname: '/**',
       },
@@ -72,6 +65,16 @@ const nextConfig: NextConfig = {
       // Cache static assets
       {
         source: '/images/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      // Cache uploads
+      {
+        source: '/uploads/:path*',
         headers: [
           {
             key: 'Cache-Control',

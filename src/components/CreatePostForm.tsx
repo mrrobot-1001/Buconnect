@@ -45,11 +45,11 @@ export function CreatePostForm({ onPostCreated }: CreatePostFormProps) {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           title: title.trim() || content.substring(0, 50),
           content: content.trim(),
           imageUrl: imageUrl.trim() || null,
-          authorId: currentUser.id,
         }),
       });
 

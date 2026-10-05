@@ -13,10 +13,12 @@ export default function FeedPage() {
 
   const fetchPosts = useCallback(async () => {
     try {
-      const response = await fetch('/api/posts');
+      const response = await fetch('/api/posts', {
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
-        setPosts(data);
+        setPosts(data.posts || []);
       }
     } catch (error) {
       console.error('Error fetching posts:', error);

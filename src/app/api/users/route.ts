@@ -1,44 +1,59 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getCurrentUser, requireAuth } from '@/lib/auth/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// GET all users
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const currentUser = await getCurrentUser();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const role = searchParams.get('role');
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const offset = parseInt(searchParams.get('offset') || '0');
 
-    let query = supabase
-      .from('users')
-      .select('id, name, email, role, bio, profile_image, course, batch, profession, created_at')
-      .order('created_at', { ascending: false });
-
+    let where: any = {};
+    
     if (role) {
-      query = query.eq('role', role);
+      where.role = role;
     }
-
+    
     if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,course.ilike.%${search}%,profession.ilike.%${search}%`);
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { course: { contains: search, mode: 'insensitive' } },
+        { profession: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
-    const { data: users, error } = await query;
-
-    if (error) {
-      console.error('Error fetching users:', error);
-      return NextResponse.json(
-        { error: 'Internal server error' },
-        { status: 500 }
-      );
+    // Exclude current user from results if logged in
+    if (currentUser) {
+      where.NOT = { id: currentUser.id };
     }
 
-    const response = NextResponse.json(users);
-    response.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
-    return response;
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          bio: true,
+          profileImage: true,
+          course: true,
+          batch: true,
+          profession: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return NextResponse.json({ users, total, limit, offset });
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(

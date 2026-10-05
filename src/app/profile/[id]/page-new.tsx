@@ -82,18 +82,22 @@ export default function ProfilePage() {
                 });
 
                 // Fetch user posts
-                const postsRes = await fetch(`/api/users/${userId}/posts`);
+                const postsRes = await fetch(`/api/users/${userId}/posts`, {
+                  credentials: 'include',
+                });
                 if (!postsRes.ok) throw new Error('Failed to fetch posts');
                 const postsData = await postsRes.json();
-                setUserPosts(postsData);
+                setUserPosts(postsData.posts || []);
 
                 // Check connection status (only if not own profile)
                 if (currentUserId && currentUserId !== userId) {
-                    const requestsRes = await fetch(`/api/connections/requests?userId=${currentUserId}`);
+                    const requestsRes = await fetch(`/api/connections/requests?userId=${currentUserId}`, {
+                      credentials: 'include',
+                    });
                     if (requestsRes.ok) {
                         const { incoming, outgoing } = await requestsRes.json();
                         // Outgoing requests (sent by current user to this user)
-                        const outgoingToThisUser = outgoing.find((r: any) => r.following_id === userId);
+                        const outgoingToThisUser = outgoing.find((r: any) => r.followingId === userId);
                         if (outgoingToThisUser) {
                             if (outgoingToThisUser.status === 'ACCEPTED') {
                                 setConnectionStatus('CONNECTED');
@@ -102,7 +106,7 @@ export default function ProfilePage() {
                             }
                         }
                         // Incoming requests (sent by this user to current user)
-                        const incomingFromThisUser = incoming.find((r: any) => r.follower_id === userId);
+                        const incomingFromThisUser = incoming.find((r: any) => r.followerId === userId);
                         if (incomingFromThisUser && incomingFromThisUser.status === 'ACCEPTED') {
                             setConnectionStatus('CONNECTED');
                         }
@@ -135,6 +139,7 @@ export default function ProfilePage() {
                 const res = await fetch('/api/connections', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ followerId: currentUserId, followingId: userId })
                 });
 
@@ -150,6 +155,7 @@ export default function ProfilePage() {
                 const res = await fetch('/api/connections', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ followerId: currentUserId, followingId: userId })
                 });
 
@@ -179,7 +185,8 @@ export default function ProfilePage() {
                 const res = await fetch('/api/connections/requests', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sender_id: currentUserId, recipient_id: userId })
+                    credentials: 'include',
+                    body: JSON.stringify({ recipientId: userId })
                 });
                 if (res.ok) {
                     setConnectionStatus('NOT_CONNECTED');
@@ -189,7 +196,8 @@ export default function ProfilePage() {
                 const res = await fetch('/api/connections/requests', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sender_id: currentUserId, recipient_id: userId })
+                    credentials: 'include',
+                    body: JSON.stringify({ recipientId: userId })
                 });
                 if (res.ok) {
                     setConnectionStatus('NOT_CONNECTED');
@@ -199,7 +207,8 @@ export default function ProfilePage() {
                 const res = await fetch('/api/connections/requests', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sender_id: currentUserId, recipient_id: userId })
+                    credentials: 'include',
+                    body: JSON.stringify({ recipientId: userId })
                 });
                 if (res.ok) {
                     setConnectionStatus('PENDING');
@@ -230,8 +239,8 @@ export default function ProfilePage() {
             const data = await res.json();
             setUser(prev => prev ? { 
                 ...prev, 
-                profile_image: data.url, 
-                profileImage: data.url 
+                profile_image: data.imageUrl, 
+                profileImage: data.imageUrl 
             } : null);
         } catch (error) {
             console.error('Error uploading profile picture:', error);

@@ -1,68 +1,79 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// GET user's posts
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const { data: posts, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        author:users!posts_author_id_fkey (
-          id,
-          name,
-          email,
-          role,
-          profile_image,
-          course,
-          batch,
-          profession
-        )
-      `)
-      .eq('author_id', id)
-      .order('created_at', { ascending: false });
+    const currentUser = await getCurrentUser();
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const offset = parseInt(searchParams.get('offset') || '0');
 
-    if (error) {
-      console.error('Error fetching user posts:', error);
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!user) {
       return NextResponse.json(
-        { error: 'Internal server error' },
-        { status: 500 }
+        { error: 'User not found' },
+        { status: 404 }
       );
     }
 
-    // Get counts for likes and comments
-    const postsWithCounts = await Promise.all(
-      (posts || []).map(async (post: any) => {
-        const { count: likesCount } = await supabase
-          .from('likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('post_id', post.id);
-
-        const { count: commentsCount } = await supabase
-          .from('comments')
-          .select('*', { count: 'exact', head: true })
-          .eq('post_id', post.id);
-
-        return {
-          ...post,
-          _count: {
-            likes: likesCount || 0,
-            comments: commentsCount || 0,
+    const [posts, total] = await Promise.all([
+      prisma.post.findMany({
+        where: { authorId: id },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              profileImage: true,
+              course: true,
+              batch: true,
+              profession: true,
+            },
           },
-        };
-      })
-    );
+          _count: {
+            select: {
+              likes: true,
+              comments: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.post.count({ where: { authorId: id } }),
+    ]);
 
-    return NextResponse.json(postsWithCounts);
+    // Check which posts are liked by current user
+    let likedPostIds = new Set<string>();
+    if (currentUser) {
+      const likes = await prisma.like.findMany({
+        where: {
+          userId: currentUser.id,
+          postId: { in: posts.map(p => p.id) },
+        },
+        select: { postId: true },
+      });
+      likedPostIds = new Set(likes.map(l => l.postId));
+    }
+
+    const postsWithLikes = posts.map(post => ({
+      ...post,
+      isLiked: likedPostIds.has(post.id),
+    }));
+
+    return NextResponse.json({ posts: postsWithLikes, total, limit, offset });
   } catch (error) {
     console.error('Error fetching user posts:', error);
     return NextResponse.json(

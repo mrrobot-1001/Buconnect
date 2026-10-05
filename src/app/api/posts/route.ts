@@ -1,90 +1,89 @@
-import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth/server';
+import { applyRateLimit, postLimiter } from '@/lib/rate-limiter';
+import { z } from 'zod';
 
-const supabase: any = supabaseAdmin;
+const createPostSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200),
+  content: z.string().min(1, 'Content is required').max(10000),
+  imageUrl: z.string().url().optional().nullable(),
+});
 
-// GET all posts
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const currentUser = await getCurrentUser();
     const { searchParams } = new URL(request.url);
     const authorId = searchParams.get('authorId');
-    const limit = searchParams.get('limit');
-    const hashtags = searchParams.get('hashtags'); // e.g. "job,internship"
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    const hashtags = searchParams.get('hashtags');
 
-    let query = supabase
-      .from('posts')
-      .select(`
-        *,
-        author:users!posts_author_id_fkey (
-          id,
-          name,
-          email,
-          role,
-          profile_image,
-          course,
-          batch,
-          profession
-        )
-      `)
-      .order('created_at', { ascending: false });
-
+    let where: any = {};
+    
     if (authorId) {
-      query = query.eq('author_id', authorId);
+      where.authorId = authorId;
     }
-
+    
     if (hashtags) {
-      const tags = hashtags.split(',').map(tag => tag.trim());
+      const tags = hashtags.split(',').map(tag => tag.trim()).filter(Boolean);
       if (tags.length > 0) {
-        // Create OR filter for hashtags in both title and content
-        // title.ilike.%#tag%,content.ilike.%#tag%
-        const orConditions = tags.flatMap(tag => [
-          `title.ilike.%#${tag}%`,
-          `content.ilike.%#${tag}%`
+        where.OR = tags.flatMap(tag => [
+          { title: { contains: `#${tag}`, mode: 'insensitive' } },
+          { content: { contains: `#${tag}`, mode: 'insensitive' } },
         ]);
-        query = query.or(orConditions.join(','));
       }
     }
 
-    if (limit) {
-      query = query.limit(parseInt(limit));
-    }
-
-    const { data: posts, error } = await query;
-
-    if (error) {
-      console.error('Error fetching posts:', error);
-      return NextResponse.json(
-        { error: 'Internal server error' },
-        { status: 500 }
-      );
-    }
-
-    // Get counts for likes and comments
-    const postsWithCounts = await Promise.all(
-      (posts || []).map(async (post: any) => {
-        const { count: likesCount } = await supabase
-          .from('likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('post_id', post.id);
-
-        const { count: commentsCount } = await supabase
-          .from('comments')
-          .select('*', { count: 'exact', head: true })
-          .eq('post_id', post.id);
-
-        return {
-          ...post,
-          _count: {
-            likes: likesCount || 0,
-            comments: commentsCount || 0,
+    const [posts, total] = await Promise.all([
+      prisma.post.findMany({
+        where,
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              profileImage: true,
+              course: true,
+              batch: true,
+              profession: true,
+            },
           },
-        };
-      })
-    );
+          _count: {
+            select: {
+              likes: true,
+              comments: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.post.count({ where }),
+    ]);
 
-    const response = NextResponse.json(postsWithCounts);
-    response.headers.set('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
-    return response;
+    // Check which posts are liked by current user
+    let likedPostIds = new Set<string>();
+    if (currentUser) {
+      const likes = await prisma.like.findMany({
+        where: {
+          userId: currentUser.id,
+          postId: { in: posts.map(p => p.id) },
+        },
+        select: { postId: true },
+      });
+      likedPostIds = new Set(likes.map(l => l.postId));
+    }
+
+    const postsWithLikes = posts.map(post => ({
+      ...post,
+      isLiked: likedPostIds.has(post.id),
+    }));
+
+    return NextResponse.json({ posts: postsWithLikes, total, limit, offset });
   } catch (error) {
     console.error('Error fetching posts:', error);
     return NextResponse.json(
@@ -94,87 +93,89 @@ export async function GET(request: Request) {
   }
 }
 
-import { applyRateLimit, postLimiter } from '@/lib/rate-limiter';
-
-// POST create new post
-export async function POST(request: Request) {
-  // Apply rate limiting
+export async function POST(request: NextRequest) {
   const rateLimitResponse = await applyRateLimit(request, postLimiter);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    const { title, content, imageUrl, authorId } = await request.json();
-
-    if (!title || !content || !authorId) {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
       return NextResponse.json(
-        { error: 'Title, content, and authorId are required' },
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const validation = createPostSchema.safeParse(body);
+    
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: validation.error.errors[0].message },
         { status: 400 }
       );
     }
 
-    const { data: post, error } = await supabase
-      .from('posts')
-      .insert({
+    const { title, content, imageUrl } = validation.data;
+
+    const post = await prisma.post.create({
+      data: {
         title,
         content,
-        image_url: imageUrl,
-        author_id: authorId,
-      })
-      .select(`
-        *,
-        author:users!posts_author_id_fkey (
-          id,
-          name,
-          email,
-          role,
-          profile_image,
-          course,
-          batch,
-          profession
-        )
-      `)
-      .single();
+        imageUrl: imageUrl || null,
+        authorId: currentUser.id,
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            profileImage: true,
+            course: true,
+            batch: true,
+            profession: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+          },
+        },
+      },
+    });
 
-    if (error) {
-      console.error('Error creating post:', error);
-      return NextResponse.json(
-        { error: 'Internal server error' },
-        { status: 500 }
-      );
-    }
+    // Create notifications for followers
+    const followers = await prisma.connection.findMany({
+      where: { followingId: currentUser.id },
+      select: { followerId: true },
+    });
 
-    // Get all followers to notify
-    const { data: connections } = await supabase
-      .from('connections')
-      .select('follower_id')
-      .eq('following_id', authorId);
-
-    if (connections && connections.length > 0) {
+    if (followers.length > 0) {
       const truncatedTitle = title.length > 50 ? title.substring(0, 50) + '...' : title;
-      const notifications = connections.map((conn: any) => ({
-        user_id: conn.follower_id,
+      const notifications = followers.map(conn => ({
+        userId: conn.followerId,
         type: 'new_post',
         title: 'New Post',
         message: `${post.author.name} posted: "${truncatedTitle}"`,
-        actor_id: authorId,
+        actorId: currentUser.id,
         link: `/post/${post.id}`,
-        read: false
       }));
 
-      await supabase
-        .from('notifications')
-        .insert(notifications);
+      await prisma.notification.createMany({ data: notifications });
     }
 
-    return NextResponse.json({
-      ...post,
-      _count: {
-        likes: 0,
-        comments: 0,
-      },
-    }, { status: 201 });
+    return NextResponse.json(
+      { ...post, isLiked: false },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Error creating post:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

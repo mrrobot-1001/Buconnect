@@ -77,7 +77,9 @@ export default function AdminPostsPage() {
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/posts?limit=500');
+      const res = await fetch('/api/admin/posts?limit=500', {
+        credentials: 'include',
+      });
       if (res.ok) {
         const data = await res.json();
         setPosts(data.posts);
@@ -95,7 +97,10 @@ export default function AdminPostsPage() {
     }
 
     try {
-      const res = await fetch(`/api/admin/posts?id=${postId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/posts?id=${postId}`, { 
+        method: 'DELETE',
+        credentials: 'include',
+      });
       if (res.ok) {
         setPosts(posts.filter(p => p.id !== postId));
       } else {
@@ -112,8 +117,9 @@ export default function AdminPostsPage() {
       const res = await fetch('/api/admin/posts', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          id: post.id,
+          postId: post.id,
           title: post.title,
           content: post.content
         })

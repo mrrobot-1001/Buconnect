@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import AppLayout from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,23 +15,24 @@ import { useUser } from "@/contexts/UserContext";
 
 type Message = {
   id: string;
-  sender_id: string;
-  recipient_id: string;
+  senderId: string;
+  recipientId: string;
   content: string;
   read: boolean;
-  created_at: string;
-  sender: { id: string; name: string; profile_image: string | null };
-  recipient: { id: string; name: string; profile_image: string | null };
+  createdAt: string;
+  sender: { id: string; name: string; profileImage: string | null };
+  recipient: { id: string; name: string; profileImage: string | null };
 };
 
 type Conversation = {
-  user: { id: string; name: string; profile_image: string | null };
+  user: { id: string; name: string; profileImage: string | null };
   lastMessage: string;
   lastMessageAt: string;
   unreadCount: number;
 };
 
-export default function MessagingPage() {
+function MessagingContent() {
+  const searchParams = useSearchParams();
   const { currentUser } = useUser();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -46,8 +48,9 @@ export default function MessagingPage() {
   const loadConversations = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const res = await fetch(`/api/messages?userId=${currentUser.id}&conversations=true`, {
+      const res = await fetch(`/api/messages?conversations=true`, {
         cache: 'no-store',
+        credentials: 'include',
       });
       if (res.ok) {
         const data = await res.json();
@@ -77,8 +80,9 @@ export default function MessagingPage() {
     if (!currentUser?.id) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/messages?userId=${currentUser.id}&otherUserId=${otherUserId}`, {
+      const res = await fetch(`/api/messages?otherUserId=${otherUserId}`, {
         cache: 'no-store',
+        credentials: 'include',
       });
       if (res.ok) {
         const data = await res.json();
@@ -91,6 +95,22 @@ export default function MessagingPage() {
     }
   };
 
+  // Handle userId query parameter to auto-select conversation
+  useEffect(() => {
+    const userId = searchParams.get('userId');
+    if (userId && conversations.length > 0) {
+      const conversation = conversations.find(c => c.user.id === userId);
+      if (conversation) {
+        setSelectedUser({
+          id: conversation.user.id,
+          name: conversation.user.name,
+          profileImage: conversation.user.profileImage,
+        });
+        loadMessages(userId);
+      }
+    }
+  }, [searchParams, conversations, loadMessages]);
+
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedUser || !currentUser?.id) return;
 
@@ -98,9 +118,9 @@ export default function MessagingPage() {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: 'include',
         body: JSON.stringify({
-          senderId: currentUser.id,
-          receiverId: selectedUser.id,
+          recipientId: selectedUser.id,
           content: newMessage.trim(),
         }),
       });
@@ -117,7 +137,11 @@ export default function MessagingPage() {
   };
 
   const selectConversation = (conv: Conversation) => {
-    setSelectedUser(conv.user);
+    setSelectedUser({
+      id: conv.user.id,
+      name: conv.user.name,
+      profileImage: conv.user.profileImage,
+    });
     loadMessages(conv.user.id);
   };
 
@@ -157,7 +181,7 @@ export default function MessagingPage() {
                       >
                         <div className="flex gap-3">
                           <Avatar>
-                            <AvatarImage src={conv.user.profile_image || undefined} />
+                            <AvatarImage src={conv.user.profileImage || undefined} />
                             <AvatarFallback>{conv.user.name[0]}</AvatarFallback>
                           </Avatar>
                           <div className="flex-1 min-w-0">
@@ -200,7 +224,7 @@ export default function MessagingPage() {
                         <ArrowLeft className="h-5 w-5" />
                       </Button>
                       <Avatar>
-                        <AvatarImage src={selectedUser.profile_image || undefined} />
+                        <AvatarImage src={selectedUser.profileImage || undefined} />
                         <AvatarFallback>{selectedUser.name[0]}</AvatarFallback>
                       </Avatar>
                       <div>
@@ -223,23 +247,23 @@ export default function MessagingPage() {
                         {messages.map((message) => (
                           <div
                             key={message.id}
-                            className={`flex ${message.sender_id === currentUser?.id ? "justify-end" : "justify-start"
+                            className={`flex ${message.senderId === currentUser?.id ? "justify-end" : "justify-start"
                               }`}
                           >
                             <div
-                              className={`max-w-[70%] rounded-lg p-3 ${message.sender_id === currentUser?.id
+                              className={`max-w-[70%] rounded-lg p-3 ${message.senderId === currentUser?.id
                                 ? "bg-primary text-primary-foreground"
                                 : "bg-muted"
                                 }`}
                             >
                               <p>{message.content}</p>
                               <p
-                                className={`text-xs mt-1 ${message.sender_id === currentUser?.id
+                                className={`text-xs mt-1 ${message.senderId === currentUser?.id
                                   ? "text-primary-foreground/70"
                                   : "text-muted-foreground"
                                   }`}
                               >
-                                {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                                {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                               </p>
                             </div>
                           </div>
@@ -277,5 +301,15 @@ export default function MessagingPage() {
         </CardContent>
       </Card>
     </AppLayout>
+  );
+}
+
+import { Suspense } from "react";
+
+export default function MessagingPage() {
+  return (
+    <Suspense fallback={<AppLayout><div className="flex items-center justify-center h-[calc(100vh-12rem)]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div></AppLayout>}>
+      <MessagingContent />
+    </Suspense>
   );
 }

@@ -37,6 +37,7 @@ export type PostWithAuthor = Post & {
     likes: number;
     comments: number;
   };
+  isLiked?: boolean;
 };
 
 export type Comment = {

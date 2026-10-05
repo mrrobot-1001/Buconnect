@@ -11,11 +11,11 @@ interface Post {
     id: string;
     title: string;
     content: string;
-    created_at: string;
+    createdAt: string;
     author: {
         id: string;
         name: string;
-        profile_image?: string | null;
+        profileImage?: string | null;
     };
 }
 
@@ -31,10 +31,11 @@ export default function OpportunityBox() {
         try {
             const res = await fetch('/api/posts?hashtags=job,internship&limit=5', {
                 cache: 'no-store',
+                credentials: 'include',
             });
             if (res.ok) {
                 const data = await res.json();
-                setOpportunities(data);
+                setOpportunities(data.posts || []);
             }
         } catch (error) {
             console.error('Error fetching opportunities:', error);
@@ -115,7 +116,7 @@ export default function OpportunityBox() {
                                     <UserAvatar user={post.author} className="h-5 w-5" />
                                     <span className="text-xs text-gray-500">{post.author.name}</span>
                                     <span className="text-[10px] text-gray-400 ml-auto">
-                                        {new Date(post.created_at).toLocaleDateString()}
+                                        {new Date(post.createdAt).toLocaleDateString()}
                                     </span>
                                 </div>
                             </div>

@@ -37,25 +37,34 @@ export default function RightSidebar() {
     try {
       // Fetch all users
       const response = await fetch('/api/users', {
-        next: { revalidate: 60 }
+        next: { revalidate: 60 },
+        credentials: 'include',
       });
       if (!response.ok) return;
 
-      const allUsers = await response.json();
+      const allUsersData = await response.json();
+      const allUsers = allUsersData.users || [];
 
       // Fetch current connections
-      const connectionsRes = await fetch(`/api/connections?userId=${currentUser.id}&type=following`);
-      const connections = connectionsRes.ok ? await connectionsRes.json() : [];
+      const connectionsRes = await fetch(`/api/connections?userId=${currentUser.id}&type=following`, {
+        credentials: 'include',
+      });
+      const connectionsData = connectionsRes.ok ? await connectionsRes.json() : [];
+      const connections = Array.isArray(connectionsData) ? connectionsData : [];
       const connectedIds = new Set(connections.map((u: any) => u.id));
 
       // Fetch pending requests
-      const requestsRes = await fetch(`/api/connections/requests?userId=${currentUser.id}`);
-      const requests = requestsRes.ok ? await requestsRes.json() : [];
+      const requestsRes = await fetch(`/api/connections/requests?userId=${currentUser.id}`, {
+        credentials: 'include',
+      });
+      const requestsData = requestsRes.ok ? await requestsRes.json() : { incoming: [], outgoing: [] };
+      const incomingRequests = requestsData.incoming || [];
+      const outgoingRequests = requestsData.outgoing || [];
 
       // Create status map
       const statusMap: { [userId: string]: 'PENDING' | 'ACCEPTED' | null } = {};
-      requests.forEach((req: any) => {
-        statusMap[req.following_id || req.followingId] = req.status;
+      outgoingRequests.forEach((req: any) => {
+        statusMap[req.followingId] = req.status;
       });
       connections.forEach((u: any) => {
         statusMap[u.id] = 'ACCEPTED';
@@ -96,9 +105,9 @@ export default function RightSidebar() {
       const response = await fetch('/api/connections/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          followerId: currentUser.id,
-          followingId: userId
+          recipientId: userId
         }),
       });
 
@@ -109,13 +118,14 @@ export default function RightSidebar() {
           description: `Connection request sent to ${userName}`,
         });
       } else {
-        throw new Error('Failed to send request');
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to send request');
       }
     } catch (error) {
       console.error('Error sending request:', error);
       toast({
         title: "Error",
-        description: "Failed to send connection request",
+        description: error instanceof Error ? error.message : "Failed to send connection request",
         variant: "destructive",
       });
     } finally {

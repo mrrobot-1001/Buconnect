@@ -6,18 +6,20 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
-import { Home, LogOut, Settings, User as UserIcon, Users, MessageSquare, Shield, Menu, Bookmark } from "lucide-react";
+import { Home, LogOut, Settings, User as UserIcon, Users, MessageSquare, Shield, Menu, Bookmark, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { UserAvatar } from "./UserAvatar";
 import { NotificationBell } from "./NotificationBell";
 import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/lib/auth/client";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { currentUser, setCurrentUser, isLoading } = useUser();
+  const { currentUser, isLoading } = useUser();
+  const { logout } = useAuth();
   const [stats, setStats] = useState({ connections: 0, profileViews: 0 });
 
   const fetchStats = useCallback(async () => {
@@ -43,8 +45,8 @@ export default function Header() {
     fetchStats();
   }, [fetchStats]);
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const handleLogout = async () => {
+    await logout();
     router.push('/');
   };
 
@@ -59,6 +61,7 @@ export default function Header() {
   const navItems = [
     { href: "/feed", icon: Home, label: "Feed" },
     { href: "/network", icon: Users, label: "Network" },
+    { href: "/connections", icon: UserPlus, label: "Connections" },
     { href: "/messaging", icon: MessageSquare, label: "Messages" },
   ]
 

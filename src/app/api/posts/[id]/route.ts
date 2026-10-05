@@ -1,69 +1,61 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/auth/server';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// GET single post
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const { data: post, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        author:users!posts_author_id_fkey (
-          id,
-          name,
-          email,
-          role,
-          profile_image,
-          course,
-          batch,
-          profession
-        ),
-        comments (
-          *,
-          author:users!comments_author_id_fkey (
-            id,
-            name,
-            profile_image
-          )
-        )
-      `)
-      .eq('id', id)
-      .single();
+    const currentUser = await getCurrentUser();
 
-    if (error || !post) {
+    const post = await prisma.post.findUnique({
+      where: { id },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            profileImage: true,
+            course: true,
+            batch: true,
+            profession: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+          },
+        },
+      },
+    });
+
+    if (!post) {
       return NextResponse.json(
         { error: 'Post not found' },
         { status: 404 }
       );
     }
 
-    // Get counts
-    const { count: likesCount } = await supabase
-      .from('likes')
-      .select('*', { count: 'exact', head: true })
-      .eq('post_id', post.id);
+    // Check if current user liked this post
+    let isLiked = false;
+    if (currentUser) {
+      const like = await prisma.like.findUnique({
+        where: {
+          postId_userId: {
+            postId: id,
+            userId: currentUser.id,
+          },
+        },
+      });
+      isLiked = !!like;
+    }
 
-    const { count: commentsCount } = await supabase
-      .from('comments')
-      .select('*', { count: 'exact', head: true })
-      .eq('post_id', post.id);
-
-    return NextResponse.json({
-      ...post,
-      _count: {
-        likes: likesCount || 0,
-        comments: commentsCount || 0,
-      },
-    });
+    return NextResponse.json({ ...post, isLiked });
   } catch (error) {
     console.error('Error fetching post:', error);
     return NextResponse.json(
@@ -73,94 +65,52 @@ export async function GET(
   }
 }
 
-// DELETE post
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const { error } = await supabase
-      .from('posts')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error deleting post:', error);
+    const currentUser = await getCurrentUser();
+    
+    if (!currentUser) {
       return NextResponse.json(
-        { error: 'Internal server error' },
-        { status: 500 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
+
+    const post = await prisma.post.findUnique({
+      where: { id },
+      select: { authorId: true },
+    });
+
+    if (!post) {
+      return NextResponse.json(
+        { error: 'Post not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if user is author or admin
+    if (post.authorId !== currentUser.id && currentUser.role !== 'ADMIN') {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    await prisma.post.delete({ where: { id } });
 
     return NextResponse.json({ message: 'Post deleted successfully' });
   } catch (error) {
     console.error('Error deleting post:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-// PATCH update post
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const { title, content, imageUrl } = await request.json();
-
-    const updateData: any = {};
-    if (title) updateData.title = title;
-    if (content) updateData.content = content;
-    if (imageUrl !== undefined) updateData.image_url = imageUrl;
-
-    const { data: post, error } = await supabase
-      .from('posts')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        author:users!posts_author_id_fkey (
-          id,
-          name,
-          email,
-          role,
-          profile_image
-        )
-      `)
-      .single();
-
-    if (error || !post) {
-      console.error('Error updating post:', error);
-      return NextResponse.json(
-        { error: 'Internal server error' },
-        { status: 500 }
-      );
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    // Get counts
-    const { count: likesCount } = await supabase
-      .from('likes')
-      .select('*', { count: 'exact', head: true })
-      .eq('post_id', post.id);
-
-    const { count: commentsCount } = await supabase
-      .from('comments')
-      .select('*', { count: 'exact', head: true })
-      .eq('post_id', post.id);
-
-    return NextResponse.json({
-      ...post,
-      _count: {
-        likes: likesCount || 0,
-        comments: commentsCount || 0,
-      },
-    });
-  } catch (error) {
-    console.error('Error updating post:', error);
+    if (error instanceof Error && error.message === 'Forbidden') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

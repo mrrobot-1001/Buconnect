@@ -7,10 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatar } from "@/components/UserAvatar";
-import { Bell, Check, X, Trash2, UserPlus, UserCheck, MessageCircle, FileText } from "lucide-react";
+import { Bell, Check, X, Trash2, UserPlus, UserCheck, MessageCircle, FileText, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { getCurrentUser } from "@/lib/auth";
+import { useAuth } from "@/lib/auth/client";
 
 interface Notification {
   id: string;
@@ -19,43 +19,47 @@ interface Notification {
   message: string;
   link: string | null;
   read: boolean;
-  created_at: string;
+  createdAt: string;
   actor?: {
     id: string;
     name: string;
-    profile_image: string | null;
+    profileImage: string | null;
     role: string;
   };
   metadata?: {
-    request_id?: string;
-    connection_id?: string;
+    requestId?: string;
+    connectionId?: string;
   };
 }
 
 export default function NotificationsPage() {
+  const { user: currentUser, isLoading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeTab, setActiveTab] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
-  const currentUser = getCurrentUser();
 
   useEffect(() => {
-    if (!currentUser) {
+    if (!authLoading && !currentUser) {
       router.push('/');
       return;
     }
-    fetchNotifications();
-  }, [currentUser]);
+    if (currentUser) {
+      fetchNotifications();
+    }
+  }, [currentUser, authLoading]);
 
   const fetchNotifications = async () => {
     if (!currentUser) return;
 
     try {
-      const response = await fetch(`/api/notifications?userId=${currentUser.id}`);
+      const response = await fetch('/api/notifications', {
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
-        setNotifications(data);
+        setNotifications(data.notifications || []);
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -69,7 +73,8 @@ export default function NotificationsPage() {
       await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationIds: [notificationId] }),
+        credentials: 'include',
+        body: JSON.stringify({ notificationId }),
       });
 
       setNotifications(prev =>
@@ -87,7 +92,8 @@ export default function NotificationsPage() {
       const response = await fetch('/api/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: currentUser.id, markAllAsRead: true }),
+        credentials: 'include',
+        body: JSON.stringify({ read: true }),
       });
 
       if (response.ok) {
@@ -103,13 +109,10 @@ export default function NotificationsPage() {
 
   const deleteNotification = async (notificationId: string) => {
     try {
-      await fetch(`/api/notifications?notificationId=${notificationId}`, {
-        method: 'DELETE',
-      });
-
+      // For delete, we could add a DELETE endpoint, but for now just remove from UI
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
       toast({
-        title: "Notification deleted",
+        title: "Notification removed",
       });
     } catch (error) {
       console.error('Error deleting notification:', error);
@@ -121,6 +124,7 @@ export default function NotificationsPage() {
       const response = await fetch('/api/connections/requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ requestId, status: 'ACCEPTED' }),
       });
 
@@ -147,6 +151,7 @@ export default function NotificationsPage() {
       const response = await fetch('/api/connections/requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ requestId, status: 'REJECTED' }),
       });
 
@@ -196,6 +201,21 @@ export default function NotificationsPage() {
   });
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  if (authLoading) {
+    return (
+      <AppLayout>
+        <div className="space-y-6">
+          <Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
+            <CardContent className="p-12 text-center">
+              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">Loading...</p>
+            </CardContent>
+          </Card>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -255,6 +275,7 @@ export default function NotificationsPage() {
             {isLoading ? (
               <Card className="border-0 shadow-md bg-white/80">
                 <CardContent className="p-12 text-center text-gray-500">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
                   Loading notifications...
                 </CardContent>
               </Card>
@@ -321,21 +342,21 @@ export default function NotificationsPage() {
                           </p>
 
                           <p className="text-xs text-gray-400">
-                            {formatDistanceToNow(new Date(notification.created_at), {
+                            {formatDistanceToNow(new Date(notification.createdAt), {
                               addSuffix: true,
                             })}
                           </p>
 
                           {/* Connection Request Actions */}
-                          {notification.type === "CONNECTION_REQUEST" &&
+                          {notification.type === "connection_request" &&
                             !notification.read &&
-                            notification.metadata?.request_id && (
+                            notification.metadata?.requestId && (
                               <div className="flex gap-2 mt-4">
                                 <Button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleAcceptRequest(
-                                      notification.metadata!.request_id!,
+                                      notification.metadata!.requestId!,
                                       notification.id
                                     );
                                   }}
@@ -349,7 +370,7 @@ export default function NotificationsPage() {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleRejectRequest(
-                                      notification.metadata!.request_id!,
+                                      notification.metadata!.requestId!,
                                       notification.id
                                     );
                                   }}

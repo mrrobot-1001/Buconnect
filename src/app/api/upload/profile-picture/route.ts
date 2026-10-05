@@ -1,94 +1,74 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { requireAuth } from '@/lib/auth/server';
+import { writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+import { existsSync } from 'fs';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
-// Size limits
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB max input
-const MAX_UPLOAD_SIZE_BYTES = 1 * 1024 * 1024; // 1MB max for actual upload (should be compressed)
-
-// POST - Upload profile picture
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const currentUser = await requireAuth();
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    const userId = formData.get('userId') as string;
 
-    if (!file || !userId) {
+    if (!file) {
       return NextResponse.json(
-        { error: 'File and userId are required' },
+        { error: 'No file provided' },
         { status: 400 }
       );
     }
 
     // Validate file type
-    if (!file.type.startsWith('image/')) {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Only image files are allowed' },
+        { error: 'Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed.' },
         { status: 400 }
       );
     }
 
-    // Validate file size (compressed images should be under 1MB)
-    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 1MB. Please compress your image.' },
+        { error: 'File too large. Maximum size is 5MB.' },
         { status: 400 }
       );
     }
 
-    // Create a unique filename (always save as jpg since we compress to JPEG)
-    const fileName = `${userId}-${Date.now()}.jpg`;
-    const filePath = `profile-pictures/${fileName}`;
-
-    // Convert file to ArrayBuffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Upload to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, buffer, {
-        contentType: 'image/jpeg',
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      return NextResponse.json(
-        { error: 'Failed to upload file' },
-        { status: 500 }
-      );
+    // Create upload directory if it doesn't exist
+    const uploadDir = join(process.cwd(), 'public', 'uploads', 'profiles');
+    if (!existsSync(uploadDir)) {
+      await mkdir(uploadDir, { recursive: true });
     }
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
+    // Generate unique filename
+    const timestamp = Date.now();
+    const extension = file.name.split('.').pop() || 'jpg';
+    const filename = `${currentUser.id}_${timestamp}.${extension}`;
+    const filepath = join(uploadDir, filename);
+
+    // Save file
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    await writeFile(filepath, buffer);
 
     // Update user profile with new image URL
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ profile_image: publicUrl })
-      .eq('id', userId);
+    const imageUrl = `/uploads/profiles/${filename}`;
+    await prisma.user.update({
+      where: { id: currentUser.id },
+      data: { profileImage: imageUrl },
+    });
 
-    if (updateError) {
-      console.error('Update error:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to update profile' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
+    return NextResponse.json({ 
       message: 'Profile picture uploaded successfully',
-      url: publicUrl,
+      imageUrl 
     });
   } catch (error) {
     console.error('Error uploading profile picture:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
