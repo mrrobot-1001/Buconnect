@@ -99,3 +99,24 @@ export async function PATCH(request: NextRequest) {
     );
   }
 }
+export async function DELETE(request: NextRequest) {
+  try {
+    const currentUser = await requireAuth();
+    const { notificationId } = await request.json();
+    if (!notificationId) {
+      return NextResponse.json({ error: 'notificationId required' }, { status: 400 });
+    }
+
+    // Scoped to the owner so users can only delete their own notifications
+    await prisma.notification.deleteMany({
+      where: { id: notificationId, userId: currentUser.id },
+    });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.error('Error deleting notification:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

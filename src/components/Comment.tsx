@@ -10,18 +10,20 @@ type Props = {
 export function Comment({ comment }: Props) {
     const createdAt = comment.createdAt || comment.created_at;
     return (
-        <div className="flex gap-3">
-            <Link href={`/profile/${comment.author.id}`}>
+        <div className="flex gap-2.5">
+            <Link href={`/profile/${comment.author.id}`} className="shrink-0">
                 <UserAvatar user={comment.author} className="h-8 w-8" />
             </Link>
-            <div className="bg-muted rounded-lg px-3 py-2 flex-1">
-                <div className="flex justify-between items-center">
-                    <Link href={`/profile/${comment.author.id}`}>
-                        <p className="text-xs font-semibold hover:underline">{comment.author.name}</p>
+            <div className="min-w-0 flex-1 rounded-2xl rounded-tl-sm border border-gray-100 bg-white px-3 py-2">
+                <div className="flex items-baseline justify-between gap-2">
+                    <Link href={`/profile/${comment.author.id}`} className="truncate text-sm font-semibold text-gray-900 hover:underline">
+                        {comment.author.name}
                     </Link>
-                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(createdAt), { addSuffix: true })}</p>
+                    <span className="shrink-0 text-xs text-gray-400">
+                        {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
+                    </span>
                 </div>
-                <p className="text-sm mt-1">{comment.text}</p>
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-gray-700">{comment.text}</p>
             </div>
         </div>
     )

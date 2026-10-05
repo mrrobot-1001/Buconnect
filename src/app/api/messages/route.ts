@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
         title: 'New Message',
         message: `${currentUser.name} sent you a message`,
         actorId: currentUser.id,
-        link: `/messaging`,
+        link: `/messaging?userId=${currentUser.id}`,
       },
     });
 

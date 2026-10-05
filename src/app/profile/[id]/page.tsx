@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ImageCropper } from "@/components/ImageCropper";
 import type { PostWithAuthor } from "@/lib/definitions";
-import { Mail, Plus, Briefcase, GraduationCap, MapPin, Edit2, UserMinus, Upload, Loader2, AlertCircle } from "lucide-react";
+import { Mail, Plus, Briefcase, GraduationCap, Edit2, UserMinus, Camera, Loader2, AlertCircle } from "lucide-react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -382,222 +382,186 @@ export default function ProfilePage() {
         );
     }
 
+    const subtitle = user.role === 'ALUMNI' ? user.profession || 'Alumni' : user.course || 'Student';
+
     return (
         <AppLayout>
-           <div className="space-y-6">
-            <Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm overflow-hidden">
-                <CardHeader className="p-0 pb-0">
-                    {/* Profile Header without banner */}
-                    <div className="p-6 sm:p-8">
-                        <div className="flex flex-col sm:flex-row sm:items-start gap-6">
-                            {/* Profile Picture */}
-                            <div className="relative flex-shrink-0">
-                                <div className="relative h-32 w-32 rounded-full overflow-hidden border-4 border-blue-100 shadow-lg">
-                                    <UserAvatar user={user} className="h-32 w-32" />
-                                </div>
-                                {isOwnProfile && (
-                                   <label className="absolute bottom-2 right-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white p-3 rounded-full cursor-pointer hover:shadow-lg transition-all hover:scale-110">
-                                     {uploading ? (
-                                       <Loader2 className="h-5 w-5 animate-spin" />
-                                     ) : (
-                                       <Upload className="h-5 w-5" />
-                                     )}
-                                     <input
-                                       type="file"
-                                       accept="image/*"
-                                       className="hidden"
-                                       onChange={handleProfilePictureUpload}
-                                       disabled={uploading}
-                                     />
-                                   </label>
+           <div className="space-y-4">
+            <Card className="overflow-hidden border border-gray-200 bg-white shadow-sm">
+                <div className="h-24 bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500 sm:h-32" />
+                <div className="px-4 pb-5 sm:px-6">
+                    <div className="relative -mt-12 w-fit sm:-mt-16">
+                        <UserAvatar
+                            user={user}
+                            className="h-24 w-24 border-4 border-white shadow-md sm:h-32 sm:w-32"
+                            fallbackClassName="text-2xl sm:text-3xl"
+                        />
+                        {isOwnProfile && (
+                            <label
+                                className="absolute bottom-1 right-1 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-blue-600 text-white shadow-md ring-2 ring-white hover:bg-blue-700"
+                                aria-label="Change profile photo"
+                                title="Change profile photo"
+                            >
+                                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="sr-only"
+                                    onChange={handleProfilePictureUpload}
+                                    disabled={uploading}
+                                />
+                            </label>
+                        )}
+                    </div>
+
+                    <h1 className="mt-3 break-words text-2xl font-bold text-gray-900">{user.name}</h1>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[15px] text-gray-600">
+                        {user.role === 'ALUMNI' ? <Briefcase className="h-4 w-4" /> : <GraduationCap className="h-4 w-4" />}
+                        <span>{subtitle}</span>
+                        {user.batch && <span className="text-gray-400">· Class of {user.batch}</span>}
+                    </p>
+                    {user.bio ? (
+                        <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-gray-700">{user.bio}</p>
+                    ) : isOwnProfile ? (
+                        <p className="mt-3 text-sm italic text-gray-400">Add a bio so people know more about you.</p>
+                    ) : null}
+
+                    <div className="mt-4 flex gap-2">
+                        {isOwnProfile ? (
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="h-10 flex-1 gap-2 rounded-full sm:flex-none">
+                  <Edit2 className="h-4 w-4" /> Edit profile
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-bold">Edit Profile</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="name" className="font-semibold">Full Name</Label>
+                    <Input
+                      id="name"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                      placeholder="Enter your full name"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="bio" className="font-semibold">Bio</Label>
+                    <Textarea
+                      id="bio"
+                      value={editForm.bio}
+                      onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                      placeholder="Tell us about yourself"
+                      rows={3}
+                      className="mt-1"
+                    />
+                  </div>
+                  {user.role === 'STUDENT' && (
+                    <>
+                      <div>
+                        <Label htmlFor="course" className="font-semibold">Course</Label>
+                        <Input
+                          id="course"
+                          value={editForm.course}
+                          onChange={(e) => setEditForm({ ...editForm, course: e.target.value })}
+                          placeholder="Your course name"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="batch" className="font-semibold">Batch Year</Label>
+                        <Input
+                          id="batch"
+                          type="number"
+                          value={editForm.batch}
+                          onChange={(e) => setEditForm({ ...editForm, batch: e.target.value })}
+                          placeholder="e.g., 2024"
+                          className="mt-1"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {user.role === 'ALUMNI' && (
+                    <div>
+                      <Label htmlFor="profession" className="font-semibold">Profession</Label>
+                      <Input
+                        id="profession"
+                        value={editForm.profession}
+                        onChange={(e) => setEditForm({ ...editForm, profession: e.target.value })}
+                        placeholder="Your profession"
+                        className="mt-1"
+                      />
+                    </div>
+                  )}
+                  <div className="flex flex-col-reverse gap-2 pt-4 sm:flex-row sm:justify-end">
+                    <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleUpdateProfile}
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+                    >
+                      Save Changes
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+                        ) : connectionStatus === 'CONNECTED' ? (
+                            <>
+                                <Button
+                                    className="h-10 flex-1 gap-2 rounded-full bg-blue-600 hover:bg-blue-700 sm:flex-none sm:px-6"
+                                    onClick={() => router.push(`/messaging?userId=${user.id}`)}
+                                >
+                                    <Mail className="h-4 w-4" /> Message
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="h-10 gap-2 rounded-full text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                                    onClick={handleDisconnect}
+                                >
+                                    <UserMinus className="h-4 w-4" />
+                                    <span className="hidden min-[380px]:inline">Disconnect</span>
+                                </Button>
+                            </>
+                        ) : (
+                            <Button
+                                onClick={handleConnect}
+                                variant={connectionStatus === 'PENDING' ? 'outline' : 'default'}
+                                className={`h-10 flex-1 gap-2 rounded-full sm:flex-none sm:px-6 ${connectionStatus === 'PENDING' ? 'text-gray-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                            >
+                                {connectionStatus === 'PENDING' ? (
+                                    <><UserMinus className="h-4 w-4" /> Withdraw request</>
+                                ) : (
+                                    <><Plus className="h-4 w-4" /> Connect</>
                                 )}
-                            </div>
-
-                            {/* Profile Info */}
-                            <div className="flex-1">
-                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                                    <div>
-                                        <h1 className="text-3xl font-bold text-gray-900">{user.name}</h1>
-                                        <p className="text-gray-600 text-sm sm:text-base mt-1">{user.bio || 'No bio added yet'}</p>
-                                        
-                                        {/* Role and Details */}
-                                        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-                                            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm font-medium">
-                                                {user.role === 'STUDENT' ? (
-                                                    <>
-                                                        <GraduationCap className="h-4 w-4" />
-                                                        {user.course || 'Student'}
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Briefcase className="h-4 w-4" />
-                                                        {user.profession || user.role}
-                                                    </>
-                                                )}
-                                            </span>
-                                            {user.role === 'STUDENT' && user.batch && (
-                                                <span className="text-sm text-gray-600 font-medium">Batch {user.batch}</span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Action Buttons */}
-                                    <div className="flex flex-col gap-2 sm:ml-auto">
-                                        {isOwnProfile ? (
-                                          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-                                            <DialogTrigger asChild>
-                                              <Button className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white gap-2 shadow-md">
-                                                <Edit2 className="h-4 w-4" /> Edit Profile
-                                              </Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="max-w-2xl">
-                                              <DialogHeader>
-                                                <DialogTitle className="text-xl font-bold">Edit Profile</DialogTitle>
-                                              </DialogHeader>
-                                              <div className="space-y-4">
-                                                <div>
-                                                  <Label htmlFor="name" className="font-semibold">Full Name</Label>
-                                                  <Input
-                                                    id="name"
-                                                    value={editForm.name}
-                                                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                                                    placeholder="Enter your full name"
-                                                    className="mt-1"
-                                                  />
-                                                </div>
-                                                <div>
-                                                  <Label htmlFor="bio" className="font-semibold">Bio</Label>
-                                                  <Textarea
-                                                    id="bio"
-                                                    value={editForm.bio}
-                                                    onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-                                                    placeholder="Tell us about yourself"
-                                                    rows={3}
-                                                    className="mt-1"
-                                                  />
-                                                </div>
-                                                {user.role === 'STUDENT' && (
-                                                  <>
-                                                    <div>
-                                                      <Label htmlFor="course" className="font-semibold">Course</Label>
-                                                      <Input
-                                                        id="course"
-                                                        value={editForm.course}
-                                                        onChange={(e) => setEditForm({ ...editForm, course: e.target.value })}
-                                                        placeholder="Your course name"
-                                                        className="mt-1"
-                                                      />
-                                                    </div>
-                                                    <div>
-                                                      <Label htmlFor="batch" className="font-semibold">Batch Year</Label>
-                                                      <Input
-                                                        id="batch"
-                                                        type="number"
-                                                        value={editForm.batch}
-                                                        onChange={(e) => setEditForm({ ...editForm, batch: e.target.value })}
-                                                        placeholder="e.g., 2024"
-                                                        className="mt-1"
-                                                      />
-                                                    </div>
-                                                  </>
-                                                )}
-                                                {user.role === 'ALUMNI' && (
-                                                  <div>
-                                                    <Label htmlFor="profession" className="font-semibold">Profession</Label>
-                                                    <Input
-                                                      id="profession"
-                                                      value={editForm.profession}
-                                                      onChange={(e) => setEditForm({ ...editForm, profession: e.target.value })}
-                                                      placeholder="Your profession"
-                                                      className="mt-1"
-                                                    />
-                                                  </div>
-                                                )}
-                                                <div className="flex justify-end gap-2 pt-4">
-                                                  <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                                                    Cancel
-                                                  </Button>
-                                                  <Button 
-                                                    onClick={handleUpdateProfile}
-                                                    className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
-                                                  >
-                                                    Save Changes
-                                                  </Button>
-                                                </div>
-                                              </div>
-                                            </DialogContent>
-                                          </Dialog>
-                                        ) : (
-                                          <>
-                                            {connectionStatus === 'CONNECTED' ? (
-                                              <div className="flex flex-col gap-2">
-                                                <Button 
-                                                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white gap-2"
-                                                  onClick={() => router.push('/messaging')}
-                                                >
-                                                  <Mail className="h-4 w-4" /> Message
-                                                </Button>
-                                                <Button 
-                                                  variant="outline" 
-                                                  className="gap-2 border-red-200 text-red-600 hover:bg-red-50"
-                                                  onClick={handleDisconnect}
-                                                >
-                                                  <UserMinus className="h-4 w-4" /> Disconnect
-                                                </Button>
-                                              </div>
-                                            ) : (
-                                              <Button
-                                                onClick={handleConnect}
-                                                className={`gap-2 ${
-                                                  connectionStatus === 'PENDING'
-                                                    ? 'border-blue-300 text-blue-600 hover:bg-blue-50'
-                                                    : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white'
-                                                }`}
-                                                variant={connectionStatus === 'PENDING' ? 'outline' : 'default'}
-                                              >
-                                                {connectionStatus === 'PENDING' ? (
-                                                  <>
-                                                    <UserMinus className="h-4 w-4" /> Cancel Request
-                                                  </>
-                                                ) : (
-                                                  <>
-                                                    <Plus className="h-4 w-4" /> Connect
-                                                  </>
-                                                )}
-                                              </Button>
-                                            )}
-                                          </>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                            </Button>
+                        )}
                     </div>
-                </CardHeader>
+                </div>
 
-                {/* Stats Section */}
-                <CardContent className="p-6 sm:p-8 border-t border-gray-100">
-                    <div className="grid grid-cols-3 gap-6">
-                        <div className="text-center">
-                            <p className="text-2xl font-bold text-blue-600">{user._count?.followers || 0}</p>
-                            <p className="text-sm text-gray-600 mt-1">Followers</p>
+                <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
+                    {[
+                        { label: 'Followers', value: user._count?.followers || 0 },
+                        { label: 'Following', value: user._count?.following || 0 },
+                        { label: 'Posts', value: user._count?.posts || 0 },
+                    ].map(stat => (
+                        <div key={stat.label} className="py-3 text-center">
+                            <p className="text-lg font-bold text-gray-900">{stat.value}</p>
+                            <p className="text-xs text-gray-500">{stat.label}</p>
                         </div>
-                        <div className="text-center border-l border-r border-gray-200">
-                            <p className="text-2xl font-bold text-blue-600">{user._count?.following || 0}</p>
-                            <p className="text-sm text-gray-600 mt-1">Following</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-2xl font-bold text-blue-600">{user._count?.posts || 0}</p>
-                            <p className="text-sm text-gray-600 mt-1">Posts</p>
-                        </div>
-                    </div>
-                </CardContent>
+                    ))}
+                </div>
             </Card>
 
             {/* Activity Section */}
             {user._count?.posts > 0 && (
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Activity</h2>
+                    <h2 className="mb-3 mt-2 px-1 text-lg font-bold text-gray-900">Posts</h2>
                     <div className="space-y-4">
                         {userPosts.map((post) => (
                             <PostCard 

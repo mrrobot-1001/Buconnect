@@ -1,12 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-
-import { Home, LogOut, Settings, User as UserIcon, Users, MessageSquare, Shield, Menu, Bookmark, UserPlus } from "lucide-react";
+import { Home, LogOut, User as UserIcon, Users, MessageSquare, Shield, Bookmark, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { UserAvatar } from "./UserAvatar";
 import { NotificationBell } from "./NotificationBell";
@@ -15,63 +11,33 @@ import { useAuth } from "@/lib/auth/client";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+const navItems = [
+  { href: "/feed", icon: Home, label: "Feed" },
+  { href: "/network", icon: Users, label: "Network" },
+  { href: "/connections", icon: UserPlus, label: "Connections" },
+  { href: "/messaging", icon: MessageSquare, label: "Messages" },
+];
+
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { currentUser, isLoading } = useUser();
   const { logout } = useAuth();
-  const [stats, setStats] = useState({ connections: 0, profileViews: 0 });
-
-  const fetchStats = useCallback(async () => {
-    if (currentUser?.id) {
-      try {
-        const res = await fetch(`/api/users/${currentUser.id}`, {
-          next: { revalidate: 60 } // Cache for 60 seconds
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setStats({
-            connections: data._count?.following || 0,
-            profileViews: data.profile_views || 0
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      }
-    }
-  }, [currentUser?.id]);
-
-  useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
 
   const handleLogout = async () => {
     await logout();
     router.push('/');
   };
 
-  const isAdminPage = pathname.startsWith('/admin');
-
   if (isLoading || !currentUser) {
     return null;
   }
 
-
-
-  const navItems = [
-    { href: "/feed", icon: Home, label: "Feed" },
-    { href: "/network", icon: Users, label: "Network" },
-    { href: "/connections", icon: UserPlus, label: "Connections" },
-    { href: "/messaging", icon: MessageSquare, label: "Messages" },
-  ]
-
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 bg-white/60 backdrop-blur-xl border-b border-white/20 shadow-sm supports-[backdrop-filter]:bg-white/60">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
-        {/* Logo and Search */}
-        <div className="flex items-center gap-8">
-          <Link href="/feed" className="flex items-center gap-2.5 transition-opacity hover:opacity-80">
-            <svg width="36" height="36" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" className="text-gray-900">
+    <header className="fixed inset-x-0 top-0 z-40 border-b border-gray-200/70 bg-white/80 backdrop-blur-xl">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-2 px-3 sm:px-4 md:h-16 lg:px-6">
+        <Link href="/feed" className="flex items-center gap-2 transition-opacity hover:opacity-80">
+            <svg width="32" height="32" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" className="text-gray-900 shrink-0" aria-hidden="true">
               <g transform="translate(0,1000) scale(0.1,-0.1)" fill="currentColor">
                 <path d="M6055 7929 c-165 -94 -304 -174 -308 -179 -5 -4 151 -287 347 -629 370 -649 413 -734 455 -917 72 -311 39 -640 -93 -928 -102 -221 -280 -435 -476 -568 -41 -28 -79 -55 -84 -59 -4 -4 69 -139 164 -299 94 -160 174 -298 177 -306 5 -12 -47 -14 -363 -14 l-369 1 2 -64 c5 -143 83 -309 202 -428 135 -134 267 -194 465 -209 67 -5 402 -10 746 -11 l625 -3 3 352 2 352 -147 1 c-82 1 -372 5 -646 8 l-497 6 82 54 c500 331 823 830 935 1446 25 141 25 547 0 685 -42 226 -104 417 -196 599 -40 80 -647 1151 -710 1253 l-16 27 -300 -170z" />
                 <path d="M4831 7230 c-161 -93 -298 -173 -304 -179 -7 -7 46 -108 168 -323 373 -653 827 -1443 836 -1452 21 -23 172 112 237 212 89 138 133 318 114 467 -6 46 -21 115 -34 152 -14 42 -156 303 -367 673 -189 333 -346 608 -350 611 -3 4 -138 -69 -300 -161z" />
@@ -80,163 +46,72 @@ export default function Header() {
                 <path d="M4075 3958 c17 -233 51 -414 109 -586 256 -760 905 -1309 1701 -1438 104 -16 718 -32 1363 -33 l292 -1 0 355 c0 195 -3 355 -7 356 -5 0 -341 4 -748 9 -685 7 -747 10 -836 28 -443 93 -793 357 -1004 754 -86 163 -155 421 -155 579 l0 59 -361 0 -360 0 6 -82z" />
               </g>
             </svg>
-            <span className="text-lg font-semibold text-gray-900 tracking-tight hidden sm:inline-block">Buconnect</span>
-          </Link>
+          <span className="text-lg font-semibold tracking-tight text-gray-900">BUConnect</span>
+        </Link>
 
-        </div>
-
-        {/* Navigation and Actions */}
-        <nav className="flex items-center gap-2 sm:gap-4">
-          {/* Mobile Menu */}
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden h-9 w-9 hover:bg-gray-100 rounded-lg">
-                <Menu className="h-5 w-5 text-gray-600" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[300px] sm:w-[400px]">
-              <SheetHeader>
-                <SheetTitle className="text-left text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  Buconnect
-                </SheetTitle>
-              </SheetHeader>
-              <div className="flex flex-col gap-4 mt-8">
-                <div className="flex items-center gap-3 px-2 py-2 mb-4 bg-gray-50 rounded-lg">
-                  <UserAvatar user={currentUser} className="h-10 w-10" />
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-sm">{currentUser.name}</span>
-                    <span className="text-xs text-gray-500">{currentUser.email}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 px-2 mb-2">
-                  <div className="bg-gray-50 p-3 rounded-lg text-center">
-                    <p className="text-xs text-gray-500 font-medium">Connections</p>
-                    <p className="text-lg font-bold text-blue-600">{stats.connections}</p>
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-lg text-center">
-                    <p className="text-xs text-gray-500 font-medium">Views</p>
-                    <p className="text-lg font-bold text-blue-600">{stats.profileViews}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  {navItems.map(item => (
-                    <Link key={item.href} href={item.href}>
-                      <Button
-                        variant="ghost"
-                        className={cn(
-                          "w-full justify-start gap-3 rounded-lg font-medium text-sm transition-all mb-1",
-                          pathname === item.href ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-gray-100"
-                        )}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.label}</span>
-                      </Button>
-                    </Link>
-                  ))}
-
-                  <Link href="/saved">
-                    <Button
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-start gap-3 rounded-lg font-medium text-sm transition-all mb-1",
-                        pathname === "/saved" ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-gray-100"
-                      )}
-                    >
-                      <Bookmark className="h-4 w-4" />
-                      <span>Saved Posts</span>
-                    </Button>
-                  </Link>
-                </div>
-
-                <div className="h-px bg-gray-200 my-2" />
-
-                <div className="space-y-1">
-                  <Link href={`/profile/${currentUser.id}`}>
-                    <Button variant="ghost" className="w-full justify-start gap-3 text-gray-700 hover:bg-gray-100">
-                      <UserIcon className="h-4 w-4" />
-                      <span>Profile</span>
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start gap-3 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    onClick={handleLogout}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    <span>Log out</span>
-                  </Button>
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
-
-          {/* Nav Items */}
-          {navItems.map(item => (
-            <Link key={item.href} href={item.href}>
-              <Button
-                variant="ghost"
+        <nav aria-label="Main" className="flex items-center gap-1 lg:gap-2">
+          {/* Phones use the bottom tab bar instead */}
+          {navItems.map(item => {
+            const active = pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                title={item.label}
                 className={cn(
-                  "h-9 px-3 gap-2 rounded-lg font-medium text-sm transition-all hidden sm:flex",
-                  "hover:bg-gray-100 text-gray-700",
-                  pathname === item.href && "bg-blue-50 text-primary"
+                  "hidden h-10 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors md:flex",
+                  active ? "bg-blue-50 text-blue-600" : "text-gray-700 hover:bg-gray-100"
                 )}
               >
-                <item.icon className="h-4 w-4" />
-                <span>{item.label}</span>
-              </Button>
-            </Link>
-          ))}
+                <item.icon className="h-5 w-5 lg:h-4 lg:w-4" />
+                <span className="hidden lg:inline">{item.label}</span>
+              </Link>
+            );
+          })}
 
-          {/* Notifications */}
           <NotificationBell />
 
-          {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-10 w-10 rounded-lg p-0 hover:bg-gray-100"
-              >
+              <Button variant="ghost" className="h-10 w-10 rounded-full p-0 hover:bg-gray-100" aria-label="Account menu">
                 <UserAvatar user={currentUser} className="h-9 w-9" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 rounded-lg border border-gray-200 shadow-lg" align="end" forceMount>
-              <DropdownMenuLabel className="px-2 py-1.5">
+            <DropdownMenuContent className="w-60 rounded-xl border border-gray-200 shadow-lg" align="end">
+              <DropdownMenuLabel className="px-3 py-2">
                 <div className="flex flex-col gap-0.5">
-                  <p className="text-sm font-semibold text-gray-900">{currentUser.name}</p>
-                  <p className="text-xs text-gray-500">{currentUser.email}</p>
+                  <p className="truncate text-sm font-semibold text-gray-900">{currentUser.name}</p>
+                  <p className="truncate text-xs font-normal text-gray-500">{currentUser.email}</p>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-gray-200" />
+              <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <Link href={`/profile/${currentUser.id}`}>
-                  <DropdownMenuItem className="cursor-pointer hover:bg-gray-50">
+                <DropdownMenuItem asChild className="cursor-pointer py-2.5">
+                  <Link href={`/profile/${currentUser.id}`}>
                     <UserIcon className="mr-2 h-4 w-4 text-gray-600" />
-                    <span className="text-sm">Profile</span>
-                  </DropdownMenuItem>
-                </Link>
-                <DropdownMenuItem className="cursor-pointer hover:bg-gray-50">
-                  <Settings className="mr-2 h-4 w-4 text-gray-600" />
-                  <span className="text-sm">Settings</span>
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild className="cursor-pointer py-2.5">
+                  <Link href="/saved">
+                    <Bookmark className="mr-2 h-4 w-4 text-gray-600" />
+                    Saved posts
+                  </Link>
                 </DropdownMenuItem>
                 {currentUser.role === 'ADMIN' && (
-                  <Link href="/admin">
-                    <DropdownMenuItem className="cursor-pointer hover:bg-gray-50">
+                  <DropdownMenuItem asChild className="cursor-pointer py-2.5">
+                    <Link href="/admin">
                       <Shield className="mr-2 h-4 w-4 text-gray-600" />
-                      <span className="text-sm">Admin Dashboard</span>
-                    </DropdownMenuItem>
-                  </Link>
+                      Admin dashboard
+                    </Link>
+                  </DropdownMenuItem>
                 )}
               </DropdownMenuGroup>
-              <DropdownMenuSeparator className="bg-gray-200" />
-              <DropdownMenuItem
-                onClick={handleLogout}
-                className="cursor-pointer hover:bg-red-50 text-red-600"
-              >
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer py-2.5 text-red-600 focus:bg-red-50 focus:text-red-700">
                 <LogOut className="mr-2 h-4 w-4" />
-                <span className="text-sm">Log out</span>
+                Log out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

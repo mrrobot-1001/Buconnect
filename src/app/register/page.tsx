@@ -120,7 +120,7 @@ export default function RegisterPage() {
     return (
       <div className="flex min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 font-sans p-4 items-center justify-center">
         <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm max-w-md w-full">
-          <CardHeader className="text-center space-y-4 p-8">
+          <CardHeader className="text-center space-y-4 p-6 sm:p-8">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">
               <Mail className="h-8 w-8 text-white" />
             </div>
@@ -180,9 +180,9 @@ export default function RegisterPage() {
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 font-sans p-4">
-      <div className="w-full max-w-2xl mx-auto my-8">
+      <div className="w-full max-w-2xl mx-auto my-2 sm:my-8">
         <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
-          <CardHeader className="text-center space-y-4 p-8">
+          <CardHeader className="text-center space-y-4 p-6 sm:p-8">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
               <Building2 className="h-8 w-8 text-white" />
             </div>
@@ -203,7 +203,7 @@ export default function RegisterPage() {
                   id="name"
                   placeholder="John Doe"
                   required
-                  className="text-base"
+                  className="h-11 text-base"
                   value={formData.name}
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
@@ -215,9 +215,11 @@ export default function RegisterPage() {
                 <Input
                   id="email"
                   type="email"
+                  autoComplete="email"
+                  inputMode="email"
                   placeholder="name@example.com"
                   required
-                  className="text-base"
+                  className="h-11 text-base"
                   value={formData.email}
                   onChange={(e) =>
                     setFormData({ ...formData, email: e.target.value })
@@ -230,8 +232,9 @@ export default function RegisterPage() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
                     required
-                    className="text-base pr-10"
+                    className="h-11 text-base pr-12"
                     value={formData.password}
                     onChange={(e) =>
                       setFormData({ ...formData, password: e.target.value })
@@ -241,7 +244,8 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-gray-500 hover:text-gray-700"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -260,7 +264,7 @@ export default function RegisterPage() {
                     setFormData({ ...formData, role: value })
                   }
                 >
-                  <SelectTrigger id="role" className="text-base">
+                  <SelectTrigger id="role" className="h-11 text-base">
                     <SelectValue placeholder="Select your role" />
                   </SelectTrigger>
                   <SelectContent>
@@ -277,7 +281,7 @@ export default function RegisterPage() {
                     <Input
                       id="course"
                       placeholder="e.g., Computer Science"
-                      className="text-base"
+                      className="h-11 text-base"
                       value={formData.course}
                       onChange={(e) =>
                         setFormData({ ...formData, course: e.target.value })
@@ -290,7 +294,7 @@ export default function RegisterPage() {
                       id="batch"
                       type="number"
                       placeholder="e.g., 2025"
-                      className="text-base"
+                      className="h-11 text-base"
                       value={formData.batch}
                       onChange={(e) =>
                         setFormData({ ...formData, batch: e.target.value })
@@ -309,7 +313,7 @@ export default function RegisterPage() {
                     <Input
                       id="profession"
                       placeholder="e.g., Software Engineer @ Google"
-                      className="text-base"
+                      className="h-11 text-base"
                       value={formData.profession}
                       onChange={(e) =>
                         setFormData({ ...formData, profession: e.target.value })
@@ -321,7 +325,7 @@ export default function RegisterPage() {
                     <Input
                       id="course"
                       placeholder="e.g., Computer Science"
-                      className="text-base"
+                      className="h-11 text-base"
                       value={formData.course}
                       onChange={(e) =>
                         setFormData({ ...formData, course: e.target.value })
@@ -334,7 +338,7 @@ export default function RegisterPage() {
                       id="batch"
                       type="number"
                       placeholder="e.g., 2018"
-                      className="text-base"
+                      className="h-11 text-base"
                       value={formData.batch}
                       onChange={(e) =>
                         setFormData({ ...formData, batch: e.target.value })
@@ -348,7 +352,7 @@ export default function RegisterPage() {
 
               <Button
                 type="submit"
-                className="w-full bg-primary hover:bg-primary/90 text-lg py-6"
+                className="h-12 w-full bg-primary text-base font-semibold hover:bg-primary/90"
                 disabled={isLoading}
               >
                 {isLoading ? "Creating Account..." : "Create Account"}

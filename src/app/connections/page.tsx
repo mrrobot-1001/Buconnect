@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import AppLayout from "@/components/AppLayout";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, UserPlus, UserMinus, Loader2, Users, Check, X, Mail, ArrowLeft } from "lucide-react";
+import { UserPlus, UserMinus, Loader2, Users, Check, X, MessageSquare, Inbox, Send } from "lucide-react";
+import { PageHeader, EmptyState, segmentedList, segmentedTrigger } from "@/components/PageHeader";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -33,6 +33,28 @@ interface ConnectionRequest {
 }
 
 type ConnectionStatus = 'NOT_CONNECTED' | 'PENDING' | 'CONNECTED' | 'INCOMING_PENDING';
+
+const subtitle = (u: { role: string; profession?: string | null; course?: string | null }) =>
+  u.role === 'ALUMNI' ? u.profession || 'Alumni' : u.course || 'Student';
+
+function PersonRow({ person, meta, children }: { person: any; meta?: string; children: React.ReactNode }) {
+  return (
+    <li className="flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap sm:p-4">
+      <Link href={`/profile/${person.id}`} className="shrink-0">
+        <UserAvatar user={person} className="h-12 w-12" />
+      </Link>
+      <div className="min-w-0 flex-1">
+        <Link href={`/profile/${person.id}`} className="block truncate font-semibold text-gray-900 hover:text-blue-600">
+          {person.name}
+        </Link>
+        <p className="truncate text-sm text-gray-600">{subtitle(person)}</p>
+        {meta && <p className="text-xs text-gray-400">{meta}</p>}
+      </div>
+      {/* Actions drop under the name on narrow phones */}
+      <div className="flex w-full gap-2 pl-[3.75rem] sm:w-auto sm:pl-0">{children}</div>
+    </li>
+  );
+}
 
 export default function ConnectionsPage() {
   const router = useRouter();
@@ -172,277 +194,114 @@ export default function ConnectionsPage() {
     router.push(`/messaging?userId=${userId}`);
   };
 
-  if (!currentUser) {
-    return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        </div>
-      </AppLayout>
-    );
-  }
+  const pendingIncoming = incomingRequests.filter(r => r.status === 'PENDING');
+  const pendingOutgoing = outgoingRequests.filter(r => r.status === 'PENDING');
+
+  const list = "divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white";
+  const loading = (
+    <div className="flex justify-center py-12">
+      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+    </div>
+  );
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Link href="/network">
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <ArrowLeft className="h-5 w-5" />
+      <PageHeader title="Connections" description="Requests and the people you're connected with" icon={Users} />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className={cn(segmentedList, "grid-cols-3")}>
+          <TabsTrigger value="requests" className={segmentedTrigger}>
+            Requests
+            {pendingIncoming.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">{pendingIncoming.length}</span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="sent" className={segmentedTrigger}>Sent</TabsTrigger>
+          <TabsTrigger value="connections" className={segmentedTrigger}>
+            Connected
+            {connections.length > 0 && <span className="ml-1.5 text-xs text-gray-400">{connections.length}</span>}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="requests" className="mt-4">
+          {isLoading ? loading : pendingIncoming.length === 0 ? (
+            <EmptyState icon={Inbox} title="No pending requests" description="New connection requests will show up here." />
+          ) : (
+            <ul className={list}>
+              {pendingIncoming.map((request) => (
+                <PersonRow key={request.id} person={request.follower} meta={`Requested ${new Date(request.createdAt).toLocaleDateString()}`}>
+                  <Button className="h-10 flex-1 gap-1.5 rounded-full bg-blue-600 px-4 hover:bg-blue-700 sm:flex-none" onClick={() => handleAccept(request.id, request.follower.id)}>
+                    <Check className="h-4 w-4" />
+                    Accept
                   </Button>
-                </Link>
-                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-                  <Users className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-2xl">Connections</CardTitle>
-                  <CardDescription>
-                    Manage your connection requests and network
-                  </CardDescription>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
+                  <Button variant="outline" className="h-10 flex-1 gap-1.5 rounded-full px-4 sm:flex-none" onClick={() => handleReject(request.id)}>
+                    <X className="h-4 w-4" />
+                    Decline
+                  </Button>
+                </PersonRow>
+              ))}
+            </ul>
+          )}
+        </TabsContent>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm border-0 shadow-sm rounded-xl p-1">
-            <TabsTrigger value="requests" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white">
-              Requests {incomingRequests.filter(r => r.status === 'PENDING').length > 0 && (
-                <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
-                  {incomingRequests.filter(r => r.status === 'PENDING').length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="sent" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-600 data-[state=active]:text-white">
-              Sent
-            </TabsTrigger>
-            <TabsTrigger value="connections" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
-              Connections {connections.length > 0 && (
-                <span className="ml-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
-                  {connections.length}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
+        <TabsContent value="sent" className="mt-4">
+          {isLoading ? loading : pendingOutgoing.length === 0 ? (
+            <EmptyState icon={Send} title="No sent requests" description="Requests you send from Network appear here until they're answered." />
+          ) : (
+            <ul className={list}>
+              {pendingOutgoing.map((request) => (
+                <PersonRow key={request.id} person={request.following} meta={`Sent ${new Date(request.createdAt).toLocaleDateString()}`}>
+                  <Button
+                    variant="outline"
+                    className="h-10 flex-1 rounded-full px-4 sm:flex-none"
+                    onClick={() => handleCancel(request.following.id)}
+                    disabled={connectingUsers.has(request.following.id)}
+                  >
+                    Withdraw
+                  </Button>
+                </PersonRow>
+              ))}
+            </ul>
+          )}
+        </TabsContent>
 
-          <TabsContent value={activeTab} className="mt-6">
-            {/* Incoming Requests Tab */}
-            {activeTab === "requests" && (
-              <div className="space-y-4">
-                {isLoading ? (
-                  <Card className="border-0 shadow-md bg-white/80">
-                    <CardContent className="p-8 text-center text-gray-500">
-                      <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
-                      <p>Loading requests...</p>
-                    </CardContent>
-                  </Card>
-                ) : incomingRequests.filter(r => r.status === 'PENDING').length === 0 ? (
-                  <Card className="border-0 shadow-md bg-gradient-to-br from-blue-50 to-indigo-50">
-                    <CardContent className="p-12 text-center">
-                      <div className="text-6xl mb-4">📬</div>
-                      <p className="text-gray-500 text-lg">No pending requests</p>
-                      <p className="text-sm text-gray-400 mt-1">Connection requests will appear here</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="space-y-3">
-                    {incomingRequests
-                      .filter(r => r.status === 'PENDING')
-                      .map((request) => (
-                        <Card key={request.id} className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-4">
-                              <Link href={`/profile/${request.follower.id}`}>
-                                <UserAvatar user={request.follower} className="h-12 w-12 ring-2 ring-gray-100" />
-                              </Link>
-                              <div className="flex-1 min-w-0">
-                                <Link href={`/profile/${request.follower.id}`}>
-                                  <h4 className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">
-                                    {request.follower.name}
-                                  </h4>
-                                </Link>
-                                <p className="text-sm text-gray-500 truncate">
-                                  {request.follower.role === 'ALUMNI' ? request.follower.profession : request.follower.course}
-                                </p>
-                                <p className="text-xs text-gray-400 mt-1">
-                                  {new Date(request.createdAt).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-sm"
-                                  onClick={() => handleAccept(request.id, request.follower.id)}
-                                >
-                                  <Check className="h-3 w-3 mr-1" />
-                                  Accept
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="rounded-xl shadow-sm"
-                                  onClick={() => handleReject(request.id)}
-                                >
-                                  <X className="h-3 w-3 mr-1" />
-                                  Decline
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Sent Requests Tab */}
-            {activeTab === "sent" && (
-              <div className="space-y-4">
-                {isLoading ? (
-                  <Card className="border-0 shadow-md bg-white/80">
-                    <CardContent className="p-8 text-center text-gray-500">
-                      <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
-                      <p>Loading...</p>
-                    </CardContent>
-                  </Card>
-                ) : outgoingRequests.filter(r => r.status === 'PENDING').length === 0 ? (
-                  <Card className="border-0 shadow-md bg-gradient-to-br from-orange-50 to-red-50">
-                    <CardContent className="p-12 text-center">
-                      <div className="text-6xl mb-4">📤</div>
-                      <p className="text-gray-500 text-lg">No pending sent requests</p>
-                      <p className="text-sm text-gray-400 mt-1">Your sent connection requests will appear here</p>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="space-y-3">
-                    {outgoingRequests
-                      .filter(r => r.status === 'PENDING')
-                      .map((request) => (
-                        <Card key={request.id} className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
-                          <CardContent className="p-4">
-                            <div className="flex items-center gap-4">
-                              <Link href={`/profile/${request.following.id}`}>
-                                <UserAvatar user={request.following} className="h-12 w-12 ring-2 ring-gray-100" />
-                              </Link>
-                              <div className="flex-1 min-w-0">
-                                <Link href={`/profile/${request.following.id}`}>
-                                  <h4 className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">
-                                    {request.following.name}
-                                  </h4>
-                                </Link>
-                                <p className="text-sm text-gray-500 truncate">
-                                  {request.following.role === 'ALUMNI' ? request.following.profession : request.following.course}
-                                </p>
-                                <p className="text-xs text-gray-400 mt-1">
-                                  Sent {new Date(request.createdAt).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="rounded-xl border-orange-200 text-orange-600 hover:bg-orange-50"
-                                onClick={() => handleCancel(request.following.id)}
-                                disabled={connectingUsers.has(request.following.id)}
-                              >
-                                <X className="h-3 w-3 mr-1" />
-                                Cancel Request
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Connections Tab */}
-            {activeTab === "connections" && (
-              <div className="space-y-4">
-                {isLoading ? (
-                  <Card className="border-0 shadow-md bg-white/80">
-                    <CardContent className="p-8 text-center text-gray-500">
-                      <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-2" />
-                      <p>Loading connections...</p>
-                    </CardContent>
-                  </Card>
-                ) : connections.length === 0 ? (
-                  <Card className="border-0 shadow-md bg-gradient-to-br from-green-50 to-emerald-50">
-                    <CardContent className="p-12 text-center">
-                      <div className="text-6xl mb-4">🤝</div>
-                      <p className="text-gray-500 text-lg">No connections yet</p>
-                      <p className="text-sm text-gray-400 mt-1">Connect with people to start building your network</p>
-                      <Button 
-                        className="mt-4" 
-                        onClick={() => router.push('/network')}
-                      >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Find People
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {connections.map((user) => (
-                      <Card key={user.id} className="overflow-hidden border-0 shadow-md bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all group">
-                        <CardContent className="p-6">
-                          <div className="flex flex-col items-center text-center space-y-4">
-                            <Link href={`/profile/${user.id}`}>
-                              <UserAvatar
-                                user={user}
-                                className="h-20 w-20 cursor-pointer ring-4 ring-gray-100 group-hover:ring-blue-200 transition-all"
-                              />
-                            </Link>
-                            <div className="space-y-1 w-full">
-                              <Link href={`/profile/${user.id}`}>
-                                <h3 className="font-semibold text-lg hover:text-blue-600 transition-colors cursor-pointer">
-                                  {user.name}
-                                </h3>
-                              </Link>
-                              <p className="text-sm text-gray-600 font-medium">
-                                {user.role === "ALUMNI" ? user.profession || "Alumni" : user.course || "Student"}
-                              </p>
-                              {user.batch && (
-                                <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
-                                  🎓 Class of {user.batch}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex gap-2 w-full">
-                              <Button
-                                size="sm"
-                                className="flex-1 bg-green-500 hover:bg-green-600 text-white rounded-xl shadow-sm"
-                                onClick={() => handleMessage(user.id)}
-                              >
-                                <Mail className="h-3 w-3 mr-1" />
-                                Message
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="flex-1 rounded-xl border-red-200 text-red-600 hover:bg-red-50"
-                                onClick={() => handleDisconnect(user.id, user.name)}
-                              >
-                                <UserMinus className="h-3 w-3 mr-1" />
-                                Disconnect
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
+        <TabsContent value="connections" className="mt-4">
+          {isLoading ? loading : connections.length === 0 ? (
+            <EmptyState
+              icon={Users}
+              title="No connections yet"
+              description="Connect with students and alumni to grow your network."
+              action={
+                <Button className="h-11 gap-2 rounded-full px-5" onClick={() => router.push('/network')}>
+                  <UserPlus className="h-4 w-4" />
+                  Find people
+                </Button>
+              }
+            />
+          ) : (
+            <ul className={list}>
+              {connections.map((user) => (
+                <PersonRow key={user.id} person={user} meta={user.batch ? `Class of ${user.batch}` : undefined}>
+                  <Button className="h-10 flex-1 gap-1.5 rounded-full bg-blue-600 px-4 hover:bg-blue-700 sm:flex-none" onClick={() => handleMessage(user.id)}>
+                    <MessageSquare className="h-4 w-4" />
+                    Message
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 shrink-0 rounded-full text-gray-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                    onClick={() => handleDisconnect(user.id, user.name)}
+                    aria-label={`Remove ${user.name}`}
+                    title="Remove connection"
+                  >
+                    <UserMinus className="h-4 w-4" />
+                  </Button>
+                </PersonRow>
+              ))}
+            </ul>
+          )}
+        </TabsContent>
+      </Tabs>
     </AppLayout>
   );
 }

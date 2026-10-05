@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { withViewerState } from '@/lib/posts';
 import { getCurrentUser } from '@/lib/auth/server';
 import { applyRateLimit, postLimiter } from '@/lib/rate-limiter';
 import { z } from 'zod';
@@ -65,23 +66,7 @@ export async function GET(request: NextRequest) {
       prisma.post.count({ where }),
     ]);
 
-    // Check which posts are liked by current user
-    let likedPostIds = new Set<string>();
-    if (currentUser) {
-      const likes = await prisma.like.findMany({
-        where: {
-          userId: currentUser.id,
-          postId: { in: posts.map(p => p.id) },
-        },
-        select: { postId: true },
-      });
-      likedPostIds = new Set(likes.map(l => l.postId));
-    }
-
-    const postsWithLikes = posts.map(post => ({
-      ...post,
-      isLiked: likedPostIds.has(post.id),
-    }));
+    const postsWithLikes = await withViewerState(posts, currentUser?.id);
 
     return NextResponse.json({ posts: postsWithLikes, total, limit, offset });
   } catch (error) {

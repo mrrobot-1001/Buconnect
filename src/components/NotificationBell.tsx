@@ -1,5 +1,6 @@
 "use client";
 
+import { notificationHref } from "@/lib/utils";
 import { useEffect, useState, useCallback } from "react";
 import { Bell, Check, X, UserPlus, UserCheck, MessageCircle, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { UserAvatar } from "./UserAvatar";
 import Link from "next/link";
@@ -171,7 +171,7 @@ export function NotificationBell() {
     }
     if (notification.link) {
       setIsOpen(false);
-      router.push(notification.link);
+      router.push(notificationHref(notification.link)!);
     }
   };
 
@@ -197,16 +197,16 @@ export function NotificationBell() {
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative rounded-xl">
+        <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-full" aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}>
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-semibold">
+            <span className="absolute right-0.5 top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white ring-2 ring-white">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-96 p-0 rounded-xl">
+      <DropdownMenuContent align="end" sideOffset={8} collisionPadding={12} className="w-[calc(100vw-1.5rem)] max-w-sm p-0 rounded-xl">
         <div className="p-4 flex items-center justify-between border-b">
           <h3 className="font-semibold text-lg">Notifications</h3>
           {unreadCount > 0 && (
@@ -221,7 +221,7 @@ export function NotificationBell() {
           )}
         </div>
 
-        <ScrollArea className="h-[400px]">
+        <div className="max-h-[min(400px,60dvh)] overflow-y-auto overscroll-contain">
           {notifications.length === 0 ? (
             <div className="p-8 text-center">
               <Bell className="h-12 w-12 text-gray-300 mx-auto mb-3" />
@@ -256,7 +256,7 @@ export function NotificationBell() {
                           <div className="h-2 w-2 rounded-full bg-blue-500 flex-shrink-0 mt-1" />
                         )}
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm text-gray-600 mt-1 break-words">
                         {notification.message}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
@@ -307,7 +307,7 @@ export function NotificationBell() {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         {notifications.length > 0 && (
           <div className="p-3 border-t bg-gray-50">

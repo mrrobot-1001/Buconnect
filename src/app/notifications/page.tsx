@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppLayout from "@/components/AppLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatar } from "@/components/UserAvatar";
-import { Bell, Check, X, Trash2, UserPlus, UserCheck, MessageCircle, FileText, Loader2 } from "lucide-react";
+import { Bell, CheckCheck, X, UserPlus, UserCheck, MessageCircle, FileText, Loader2, ThumbsUp } from "lucide-react";
+import { PageHeader, EmptyState, segmentedList, segmentedTrigger } from "@/components/PageHeader";
+import { cn, notificationHref } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth/client";
@@ -108,13 +109,19 @@ export default function NotificationsPage() {
   };
 
   const deleteNotification = async (notificationId: string) => {
+    const previous = notifications;
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
     try {
-      // For delete, we could add a DELETE endpoint, but for now just remove from UI
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      toast({
-        title: "Notification removed",
+      const res = await fetch('/api/notifications', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ notificationId }),
       });
+      if (!res.ok) throw new Error('Failed to delete notification');
     } catch (error) {
+      setNotifications(previous);
+      toast({ title: "Couldn't remove notification", variant: "destructive" });
       console.error('Error deleting notification:', error);
     }
   };
@@ -171,8 +178,9 @@ export default function NotificationsPage() {
     if (!notification.read) {
       markAsRead(notification.id);
     }
-    if (notification.link) {
-      router.push(notification.link);
+    const href = notificationHref(notification.link);
+    if (href) {
+      router.push(href);
     }
   };
 
@@ -185,6 +193,12 @@ export default function NotificationsPage() {
         return <UserCheck className="h-5 w-5 text-green-500" />;
       case 'new_post':
         return <FileText className="h-5 w-5 text-orange-500" />;
+      case 'like':
+      case 'new_like':
+        return <ThumbsUp className="h-5 w-5 text-blue-500" />;
+      case 'comment':
+      case 'new_comment':
+        return <MessageCircle className="h-5 w-5 text-green-500" />;
       case 'new_message':
       case 'message':
         return <MessageCircle className="h-5 w-5 text-purple-500" />;
@@ -202,195 +216,96 @@ export default function NotificationsPage() {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  if (authLoading) {
-    return (
-      <AppLayout>
-        <div className="space-y-6">
-          <Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
-            <CardContent className="p-12 text-center">
-              <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">Loading...</p>
-            </CardContent>
-          </Card>
-        </div>
-      </AppLayout>
-    );
-  }
+  const isRequest = (n: Notification) => n.type.toLowerCase() === "connection_request";
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-                  <Bell className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-2xl">Notifications</CardTitle>
-                  <CardDescription>
-                    Stay updated with your connections and activity
-                  </CardDescription>
-                </div>
-              </div>
-              {unreadCount > 0 && (
-                <Button
-                  onClick={markAllAsRead}
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl"
-                >
-                  <Check className="h-4 w-4 mr-2" />
-                  Mark all as read
-                </Button>
-              )}
+      <PageHeader
+        title="Notifications"
+        icon={Bell}
+        action={
+          unreadCount > 0 && (
+            <Button onClick={markAllAsRead} variant="ghost" className="h-10 gap-1.5 rounded-full px-3 text-sm text-blue-600 hover:bg-blue-50 hover:text-blue-700">
+              <CheckCheck className="h-4 w-4" />
+              <span className="hidden min-[380px]:inline">Mark all read</span>
+            </Button>
+          )
+        }
+      />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className={cn(segmentedList, "grid-cols-3")}>
+          <TabsTrigger value="all" className={segmentedTrigger}>All</TabsTrigger>
+          <TabsTrigger value="unread" className={segmentedTrigger}>
+            Unread{unreadCount > 0 && <span className="ml-1.5 rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white">{unreadCount}</span>}
+          </TabsTrigger>
+          <TabsTrigger value="requests" className={segmentedTrigger}>Requests</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={activeTab} className="mt-4">
+          {isLoading || authLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
             </div>
-          </CardHeader>
-        </Card>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm border-0 shadow-sm rounded-xl p-1">
-            <TabsTrigger
-              value="all"
-              className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white"
-            >
-              All ({notifications.length})
-            </TabsTrigger>
-            <TabsTrigger
-              value="unread"
-              className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-600 data-[state=active]:text-white"
-            >
-              Unread ({unreadCount})
-            </TabsTrigger>
-            <TabsTrigger
-              value="requests"
-              className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white"
-            >
-              Requests
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value={activeTab} className="mt-6">
-            {isLoading ? (
-              <Card className="border-0 shadow-md bg-white/80">
-                <CardContent className="p-12 text-center text-gray-500">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-2" />
-                  Loading notifications...
-                </CardContent>
-              </Card>
-            ) : filteredNotifications.length === 0 ? (
-              <Card className="border-0 shadow-md bg-gradient-to-br from-blue-50 to-indigo-50">
-                <CardContent className="p-12 text-center">
-                  <Bell className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-600 font-medium">No notifications</p>
-                  <p className="text-sm text-gray-400 mt-2">
-                    {activeTab === "unread"
-                      ? "You're all caught up! 🎉"
-                      : "We'll notify you when something happens"}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {filteredNotifications.map((notification) => (
-                  <Card
-                    key={notification.id}
-                    className={`border-0 shadow-md hover:shadow-lg transition-all cursor-pointer ${
-                      !notification.read
-                        ? "bg-gradient-to-r from-blue-50 to-indigo-50"
-                        : "bg-white/80"
-                    }`}
+          ) : filteredNotifications.length === 0 ? (
+            <EmptyState
+              icon={Bell}
+              title={activeTab === "unread" ? "You're all caught up" : "No notifications"}
+              description={activeTab === "unread" ? undefined : "We'll let you know when something happens."}
+            />
+          ) : (
+            <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+              {filteredNotifications.map((notification) => (
+                <li
+                  key={notification.id}
+                  className={cn("relative flex gap-3 p-3 sm:p-4", !notification.read && "bg-blue-50/60")}
+                >
+                  <button
                     onClick={() => handleNotificationClick(notification)}
+                    className="flex min-w-0 flex-1 gap-3 text-left"
                   >
-                    <CardContent className="p-5">
-                      <div className="flex gap-4">
-                        {notification.actor && (
-                          <UserAvatar
-                            user={notification.actor}
-                            className="h-12 w-12 ring-2 ring-gray-100"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-3 mb-2">
-                            <div className="flex items-center gap-2">
-                              {getNotificationIcon(notification.type)}
-                              <h4 className="font-semibold text-gray-900">
-                                {notification.title}
-                              </h4>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {!notification.read && (
-                                <div className="h-2 w-2 rounded-full bg-blue-500" />
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 rounded-lg hover:bg-red-50 hover:text-red-600"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteNotification(notification.id);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-
-                          <p className="text-sm text-gray-600 mb-2">
-                            {notification.message}
-                          </p>
-
-                          <p className="text-xs text-gray-400">
-                            {formatDistanceToNow(new Date(notification.createdAt), {
-                              addSuffix: true,
-                            })}
-                          </p>
-
-                          {/* Connection Request Actions */}
-                          {notification.type === "connection_request" &&
-                            !notification.read &&
-                            notification.metadata?.requestId && (
-                              <div className="flex gap-2 mt-4">
-                                <Button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleAcceptRequest(
-                                      notification.metadata!.requestId!,
-                                      notification.id
-                                    );
-                                  }}
-                                  className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl shadow-md"
-                                >
-                                  <Check className="h-4 w-4 mr-2" />
-                                  Accept Request
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRejectRequest(
-                                      notification.metadata!.requestId!,
-                                      notification.id
-                                    );
-                                  }}
-                                  className="rounded-xl"
-                                >
-                                  <X className="h-4 w-4 mr-2" />
-                                  Decline
-                                </Button>
-                              </div>
-                            )}
+                    <div className="relative shrink-0">
+                      {notification.actor ? (
+                        <UserAvatar user={notification.actor} className="h-12 w-12" />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                          <Bell className="h-5 w-5 text-gray-500" />
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
+                      )}
+                      <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow ring-1 ring-gray-100 [&>svg]:h-3.5 [&>svg]:w-3.5">
+                        {getNotificationIcon(notification.type)}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words text-sm text-gray-900">
+                        <span className="font-semibold">{notification.title}</span>
+                        <span className="text-gray-600"> · {notification.message}</span>
+                      </p>
+                      <p className={cn("mt-1 text-xs", notification.read ? "text-gray-400" : "font-medium text-blue-600")}>
+                        {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                      </p>
+                      {isRequest(notification) && !notification.read && (
+                        <span className="mt-2 inline-flex h-9 items-center rounded-full bg-blue-600 px-4 text-sm font-medium text-white">
+                          View request
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 shrink-0 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-600"
+                    onClick={() => deleteNotification(notification.id)}
+                    aria-label="Remove notification"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </TabsContent>
+      </Tabs>
     </AppLayout>
   );
 }

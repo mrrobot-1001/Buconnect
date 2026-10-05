@@ -33,17 +33,15 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const { user, isLoading, updateProfile, refreshUser } = useAuth();
-  const [currentUser, setCurrentUserState] = useState<UserData | null>(null);
-
-  // Sync with auth context
-  useEffect(() => {
-    if (!isLoading) {
-      setCurrentUserState(user);
-    }
-  }, [user, isLoading]);
+  // Derive from auth directly. Copying it in an effect left one render where
+  // isLoading was false but currentUser was still null, and AppLayout then
+  // redirected logged-in users to the login page on every full page load.
+  const [override, setOverride] = useState<UserData | null | undefined>(undefined);
+  useEffect(() => setOverride(undefined), [user]);
+  const currentUser = override === undefined ? user : override;
 
   const setCurrentUser = useCallback((userData: UserData | null) => {
-    setCurrentUserState(userData);
+    setOverride(userData);
   }, []);
 
   const updateUserProfile = useCallback(async (updates: Partial<UserData>) => {

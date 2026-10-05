@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         title: 'New Connection Request',
         message: `${currentUser.name} sent you a connection request`,
         actorId: currentUser.id,
-        link: `/connections/requests`,
+        link: `/connections`,
       },
     });
 

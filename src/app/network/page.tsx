@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import AppLayout from "@/components/AppLayout";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, UserPlus, UserMinus, Loader2, Users } from "lucide-react";
+import { Search, UserPlus, UserCheck, Loader2, Users, Check, X, Clock } from "lucide-react";
+import { PageHeader, EmptyState, segmentedList, segmentedTrigger } from "@/components/PageHeader";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -46,14 +47,12 @@ export default function NetworkPage() {
             const userId = currentUser?.id || null;
 
             // Fetch all users
-            const response = await fetch('/api/users', {
-                next: { revalidate: 60 },
+            const response = await fetch('/api/users?limit=100', {
                 credentials: 'include',
             });
             if (response.ok) {
                 const data = await response.json();
-                // Filter out current user
-                const filteredUsers = userId ? data.filter((u: User) => u.id !== userId) : data;
+                const filteredUsers: User[] = (data.users || []).filter((u: User) => u.id !== userId);
                 setAllUsers(filteredUsers);
 
                 // Fetch connection requests for current user
@@ -260,154 +259,109 @@ export default function NetworkPage() {
         return matchesSearch && user.role !== "ADMIN";
     });
 
+    const counts = {
+        all: allUsers.filter(u => u.role !== "ADMIN").length,
+        students: allUsers.filter(u => u.role === "STUDENT").length,
+        alumni: allUsers.filter(u => u.role === "ALUMNI").length,
+    };
+
+    const renderAction = (user: User) => {
+        const status = connectionStatus[user.id];
+        const busy = connectingUsers.has(user.id);
+        if (status === 'INCOMING_PENDING') {
+            return (
+                <div className="flex gap-2">
+                    <Button size="icon" className="h-10 w-10 rounded-full bg-blue-600 hover:bg-blue-700" onClick={() => handleAccept(user.id)} aria-label={`Accept ${user.name}`}>
+                        <Check className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="outline" className="h-10 w-10 rounded-full" onClick={() => handleReject(user.id)} aria-label={`Decline ${user.name}`}>
+                        <X className="h-4 w-4" />
+                    </Button>
+                </div>
+            );
+        }
+        return (
+            <Button
+                size="sm"
+                onClick={() => handleConnect(user.id, user.name)}
+                disabled={busy}
+                variant={status === 'PENDING' || status === 'CONNECTED' ? "outline" : "default"}
+                className={cn(
+                    "h-10 min-w-[104px] gap-1.5 rounded-full px-4",
+                    status === 'CONNECTED' && "border-green-200 text-green-700 hover:bg-green-50",
+                    status === 'PENDING' && "text-gray-600",
+                    (!status || status === 'NOT_CONNECTED') && "bg-blue-600 hover:bg-blue-700"
+                )}
+            >
+                {busy ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                ) : status === 'CONNECTED' ? (
+                    <><UserCheck className="h-4 w-4" />Connected</>
+                ) : status === 'PENDING' ? (
+                    <><Clock className="h-4 w-4" />Pending</>
+                ) : (
+                    <><UserPlus className="h-4 w-4" />Connect</>
+                )}
+            </Button>
+        );
+    };
+
     return (
         <AppLayout>
-            <div className="space-y-6">
-                <Card className="border-0 shadow-md bg-white/80 backdrop-blur-sm">
-                    <CardHeader>
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-                                <Users className="h-6 w-6 text-white" />
-                            </div>
-                            <div>
-                                <CardTitle className="text-2xl">Network</CardTitle>
-                                <CardDescription>
-                                    Connect with students, alumni, and expand your network 🤝
-                                </CardDescription>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                            <Input
-                                placeholder="Search by name, email, course, or profession... 🔍"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10 bg-gray-50/50 border-gray-200 rounded-xl focus:bg-white"
-                            />
-                        </div>
-                    </CardContent>
-                </Card>
+            <PageHeader title="Network" description="Find students and alumni to connect with" icon={Users} />
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
-                    <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm border-0 shadow-sm rounded-xl p-1">
-                        <TabsTrigger value="all" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-600 data-[state=active]:text-white">
-                            All
-                        </TabsTrigger>
-                        <TabsTrigger value="students" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-600 data-[state=active]:text-white">
-                            Students
-                        </TabsTrigger>
-                        <TabsTrigger value="alumni" className="rounded-lg data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-600 data-[state=active]:text-white">
-                            Alumni
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value={activeTab} className="mt-6">
-                        {isLoading ? (
-                            <Card className="border-0 shadow-md bg-white/80">
-                                <CardContent className="p-8 text-center text-gray-500">
-                                    <div className="flex flex-col items-center gap-3">
-                                        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                                        <p>Loading users...</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ) : filteredUsers.length === 0 ? (
-                            <Card className="border-0 shadow-md bg-white/80">
-                                <CardContent className="p-12 text-center">
-                                    <div className="text-6xl mb-4">🔍</div>
-                                    <p className="text-gray-500">No users found</p>
-                                    <p className="text-sm text-gray-400 mt-2">Try adjusting your search</p>
-                                </CardContent>
-                            </Card>
-                        ) : (
-                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                {filteredUsers.map((user) => (
-                                    <Card key={user.id} className="overflow-hidden border-0 shadow-md bg-white/80 backdrop-blur-sm hover:shadow-xl transition-all group">
-                                        <CardContent className="p-6">
-                                            <div className="flex flex-col items-center text-center space-y-4">
-                                                <Link href={`/profile/${user.id}`}>
-                                                    <div className="relative">
-                                                        <UserAvatar
-                                                            user={user}
-                                                            className="h-20 w-20 cursor-pointer ring-4 ring-gray-100 group-hover:ring-blue-200 transition-all"
-                                                        />
-                                                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-400 rounded-full border-4 border-white"></div>
-                                                    </div>
-                                                </Link>
-                                                <div className="space-y-1 w-full">
-                                                    <Link href={`/profile/${user.id}`}>
-                                                        <h3 className="font-semibold text-lg hover:text-blue-600 transition-colors cursor-pointer">
-                                                            {user.name}
-                                                        </h3>
-                                                    </Link>
-                                                    <p className="text-sm text-gray-600 font-medium">
-                                                        {user.role === "ALUMNI"
-                                                            ? user.profession || "Alumni"
-                                                            : user.course || "Student"}
-                                                    </p>
-                                                    {user.batch && (
-                                                        <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
-                                                            🎓 Class of {user.batch}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                {connectionStatus[user.id] === 'INCOMING_PENDING' ? (
-                                                    <div className="flex gap-2 w-full">
-                                                        <Button
-                                                            size="sm"
-                                                            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-sm hover:shadow-md transition-all"
-                                                            onClick={() => handleAccept(user.id)}
-                                                        >
-                                                            Accept
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="flex-1 rounded-xl shadow-sm hover:shadow-md transition-all"
-                                                            onClick={() => handleReject(user.id)}
-                                                        >
-                                                            Reject
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <Button
-                                                        className="w-full rounded-xl shadow-sm hover:shadow-md transition-all"
-                                                        size="sm"
-                                                        onClick={() => handleConnect(user.id, user.name)}
-                                                        variant={connectionStatus[user.id] === 'PENDING' ? "outline" : connectionStatus[user.id] === 'CONNECTED' ? "outline" : "default"}
-                                                        disabled={connectingUsers.has(user.id)}
-                                                    >
-                                                        {connectingUsers.has(user.id) ? (
-                                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                                        ) : connectionStatus[user.id] === 'CONNECTED' ? (
-                                                            <>
-                                                                <UserMinus className="h-4 w-4 mr-2" />
-                                                                Connected ✓
-                                                            </>
-                                                        ) : connectionStatus[user.id] === 'PENDING' ? (
-                                                            <>
-                                                                <UserMinus className="h-4 w-4 mr-2" />
-                                                                Pending...
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <UserPlus className="h-4 w-4 mr-2" />
-                                                                Connect
-                                                            </>
-                                                        )}
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
-                    </TabsContent>
-                </Tabs>
+            <div className="relative mb-3">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Input
+                    type="search"
+                    placeholder="Search name, course or profession"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-11 rounded-xl border-gray-200 bg-white pl-10"
+                    aria-label="Search people"
+                />
             </div>
+
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className={cn(segmentedList, "grid-cols-3")}>
+                    <TabsTrigger value="all" className={segmentedTrigger}>All ({counts.all})</TabsTrigger>
+                    <TabsTrigger value="students" className={segmentedTrigger}>Students ({counts.students})</TabsTrigger>
+                    <TabsTrigger value="alumni" className={segmentedTrigger}>Alumni ({counts.alumni})</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value={activeTab} className="mt-4">
+                    {isLoading ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                        </div>
+                    ) : filteredUsers.length === 0 ? (
+                        <EmptyState icon={Search} title="No people found" description="Try a different name or filter." />
+                    ) : (
+                        <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                            {filteredUsers.map((user) => (
+                                <li key={user.id} className="flex items-center gap-3 p-3 sm:p-4">
+                                    <Link href={`/profile/${user.id}`} className="shrink-0">
+                                        <UserAvatar user={user} className="h-12 w-12" />
+                                    </Link>
+                                    <div className="min-w-0 flex-1">
+                                        <Link href={`/profile/${user.id}`} className="block truncate font-semibold text-gray-900 hover:text-blue-600">
+                                            {user.name}
+                                        </Link>
+                                        <p className="truncate text-sm text-gray-600">
+                                            {user.role === "ALUMNI" ? user.profession || "Alumni" : user.course || "Student"}
+                                        </p>
+                                        <p className="text-xs text-gray-400">
+                                            {user.role === "ALUMNI" ? "Alumni" : "Student"}
+                                            {user.batch ? ` · Class of ${user.batch}` : ""}
+                                        </p>
+                                    </div>
+                                    {renderAction(user)}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </TabsContent>
+            </Tabs>
         </AppLayout>
     );
 }

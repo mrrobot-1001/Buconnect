@@ -34,6 +34,7 @@ model User {
   actorNotifications Notification[] @relation("NotificationActor")
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+  savedPosts   SavedPost[]
 }
 
 model Post {
@@ -46,6 +47,7 @@ model Post {
   createdAt DateTime  @default(now())
   comments  Comment[]
   likes     Like[]
+  savedBy   SavedPost[]
 }
 
 model Like {
@@ -133,5 +135,17 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
+model SavedPost {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
   @@index([userId, createdAt])
 }

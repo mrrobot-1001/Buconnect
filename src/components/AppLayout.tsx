@@ -3,9 +3,11 @@
 import Header from "@/components/Header";
 import LeftSidebar from "@/components/LeftSidebar";
 import RightSidebar from "@/components/RightSidebar";
+import { MobileNav } from "@/components/MobileNav";
 import { useUser } from "@/contexts/UserContext";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 type AppLayoutProps = {
   children: React.ReactNode;
@@ -14,50 +16,54 @@ type AppLayoutProps = {
 export default function AppLayout({ children }: AppLayoutProps) {
   const { currentUser, isLoading } = useUser();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     // Redirect to login if not authenticated (after loading completes)
     if (!isLoading && !currentUser) {
-      router.push('/');
+      router.replace('/');
     }
   }, [isLoading, currentUser, router]);
 
-  // Show loading state while checking authentication
-  if (isLoading) {
+  if (isLoading || !currentUser) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 animate-pulse"></div>
-          <p className="text-gray-500 text-lg">Loading...</p>
-        </div>
+      <div className="flex min-h-[100dvh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" aria-label="Loading" />
       </div>
     );
   }
 
-  // Don't render anything if not authenticated
-  if (!currentUser) {
-    return null;
-  }
+  // Below xl the right rail has no column; on the feed it moves under the posts.
+  const showRailInline = pathname === '/feed';
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-[100dvh]">
       <Header />
-      <main className="container mx-auto grid grid-cols-12 gap-6 px-4 pt-24 pb-8 max-w-7xl">
-        <aside className="hidden md:block md:col-span-3">
-          <LeftSidebar />
-        </aside>
-        <section className="col-span-12 md:col-span-6">
-          {children}
-        </section>
-        <aside className="md:hidden col-span-12 mt-8">
-          <RightSidebar />
-        </aside>
-        <aside className="hidden md:block md:col-span-3">
-          <div className="sticky top-24">
-            <RightSidebar />
-          </div>
-        </aside>
+      <main className="mx-auto w-full max-w-7xl px-3 pt-[4.5rem] pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-4 md:pt-24 md:pb-10 lg:px-6">
+        <div className="grid grid-cols-12 gap-6">
+          <aside className="hidden lg:col-span-3 lg:block">
+            <div className="sticky top-24">
+              <LeftSidebar />
+            </div>
+          </aside>
+          <section className="col-span-12 min-w-0 lg:col-span-9 xl:col-span-6">
+            <div className="mx-auto w-full max-w-2xl xl:max-w-none">
+              {children}
+              {showRailInline && (
+                <div className="mt-6 xl:hidden">
+                  <RightSidebar />
+                </div>
+              )}
+            </div>
+          </section>
+          <aside className="hidden xl:col-span-3 xl:block">
+            <div className="sticky top-24">
+              <RightSidebar />
+            </div>
+          </aside>
+        </div>
       </main>
+      <MobileNav />
     </div>
   );
 }

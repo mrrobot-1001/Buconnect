@@ -4,7 +4,8 @@ import { getCurrentUser, requireAuth } from '@/lib/auth/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const currentUser = await getCurrentUser();
+    // Member directory (includes emails), so logged-in users only
+    const currentUser = await requireAuth();
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const role = searchParams.get('role');
@@ -55,6 +56,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users, total, limit, offset });
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     console.error('Error fetching users:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

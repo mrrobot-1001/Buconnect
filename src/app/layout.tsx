@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { Inter } from 'next/font/google';
@@ -8,7 +8,7 @@ import { UserProvider } from '@/contexts/UserContext';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'Buconnect - Alumni & Student Network',
+  title: 'BUConnect - Alumni & Student Network',
   description: 'A minimal and sleek platform for alumni and students to connect, collaborate, and build networks.',
   icons: {
     icon: [
@@ -20,6 +20,13 @@ export const metadata: Metadata = {
   other: {
     'msapplication-TileImage': '/logo.svg',
   },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#ffffff',
 };
 
 export default function RootLayout({

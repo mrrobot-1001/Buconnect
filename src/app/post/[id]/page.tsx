@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import AppLayout from "@/components/AppLayout";
+import { PageHeader } from "@/components/PageHeader";
 import { PostCard } from "@/components/PostCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, ArrowLeft } from "lucide-react";
@@ -71,23 +72,12 @@ export default function SinglePostPage() {
 
     return (
         <AppLayout>
-            <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" asChild className="gap-2">
-                        <Link href="/feed">
-                            <ArrowLeft className="h-4 w-4" />
-                            Back to Feed
-                        </Link>
-                    </Button>
-                </div>
-                <PostCard 
-                    post={post} 
-                    onDelete={() => {
-                        // Navigate back to feed after deletion
-                        router.push('/feed');
-                    }} 
-                />
-            </div>
+            <PageHeader title="Post" backHref="/feed" />
+            <PostCard
+                post={post}
+                defaultShowComments
+                onDelete={() => router.push('/feed')}
+            />
         </AppLayout>
     );
 }

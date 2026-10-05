@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { withViewerState } from '@/lib/posts';
 import { getCurrentUser } from '@/lib/auth/server';
 
 export async function GET(
@@ -41,21 +42,8 @@ export async function GET(
       );
     }
 
-    // Check if current user liked this post
-    let isLiked = false;
-    if (currentUser) {
-      const like = await prisma.like.findUnique({
-        where: {
-          postId_userId: {
-            postId: id,
-            userId: currentUser.id,
-          },
-        },
-      });
-      isLiked = !!like;
-    }
-
-    return NextResponse.json({ ...post, isLiked });
+    const [withState] = await withViewerState([post], currentUser?.id);
+    return NextResponse.json(withState);
   } catch (error) {
     console.error('Error fetching post:', error);
     return NextResponse.json(

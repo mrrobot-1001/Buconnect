@@ -7,20 +7,35 @@ import { Label } from "@/components/ui/label";
 import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth/client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Already signed in: go straight to the app
+  useEffect(() => {
+    if (!authLoading && user) router.replace("/feed");
+  }, [authLoading, user, router]);
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    signIn(email, password);
+  };
+
+  const quickLogin = (demoEmail: string) => {
+    setEmail(demoEmail);
+    setPassword("password123");
+    signIn(demoEmail, "password123");
+  };
+
+  const signIn = async (email: string, password: string) => {
     setIsLoading(true);
 
     try {
@@ -114,10 +129,10 @@ export default function LoginPage() {
       </div>
 
       {/* Right side - Login form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
         <div className="w-full max-w-md">
           <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
-            <CardHeader className="text-center space-y-4 p-8">
+            <CardHeader className="text-center space-y-4 p-6 sm:p-8">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg lg:hidden">
                 <Building2 className="h-8 w-8 text-white" />
               </div>
@@ -133,7 +148,7 @@ export default function LoginPage() {
                 </CardDescription>
               </div>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="p-5 sm:p-6">
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
@@ -144,54 +159,48 @@ export default function LoginPage() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="text-base"
+                    autoComplete="email"
+                    inputMode="email"
+                    className="h-12 text-base"
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
-                    <Link href="#" className="text-sm text-primary/80 hover:underline">
-                      Forgot password?
-                    </Link>
-                  </div>
+                  <Label htmlFor="password">Password</Label>
                   <Input
                     id="password"
                     type="password"
                     required
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    className="text-base"
+                    autoComplete="current-password"
+                    className="h-12 text-base"
                   />
                 </div>
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-lg py-6" disabled={isLoading}>
+                <Button type="submit" className="h-12 w-full bg-primary text-base font-semibold hover:bg-primary/90" disabled={isLoading}>
                   {isLoading ? "Logging in..." : "Login"}
                 </Button>
               </form>
 
-              {/* Test Credentials */}
-              <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Quick Login (Test Accounts)</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setEmail('rohan@example.com'); setPassword('password123'); }}
-                    className="p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-left transition-colors text-sm"
-                  >
-                    <p className="font-semibold text-blue-800">Student</p>
-                    <p className="text-xs text-blue-600">rohan@example.com</p>
-                    <p className="text-xs text-blue-500">password123</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setEmail('alisha.s@example.com'); setPassword('password123'); }}
-                    className="p-3 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-left transition-colors text-sm"
-                  >
-                    <p className="font-semibold text-purple-800">Alumni</p>
-                    <p className="text-xs text-purple-600">alisha.s@example.com</p>
-                    <p className="text-xs text-purple-500">password123</p>
-                  </button>
+              {/* Demo accounts */}
+              <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:p-4">
+                <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500">Try a demo account</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {[
+                    { label: "Student", email: "rohan@example.com", tone: "border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800" },
+                    { label: "Alumni", email: "alisha.s@example.com", tone: "border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800" },
+                  ].map(demo => (
+                    <button
+                      key={demo.email}
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => quickLogin(demo.email)}
+                      className={`flex min-h-[52px] min-w-0 flex-col justify-center rounded-lg border px-3 py-2 text-left transition-colors disabled:opacity-60 ${demo.tone}`}
+                    >
+                      <span className="text-sm font-semibold">Sign in as {demo.label}</span>
+                      <span className="truncate text-xs opacity-75">{demo.email}</span>
+                    </button>
+                  ))}
                 </div>
-                <p className="text-xs text-gray-500 mt-3 text-center">Click to auto-fill credentials</p>
               </div>
 
               <div className="mt-6 text-center text-sm">

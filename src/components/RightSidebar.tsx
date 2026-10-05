@@ -189,32 +189,32 @@ export default function RightSidebar() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="rounded-xl border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                      className="h-10 w-10 shrink-0 rounded-full p-0 border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
                       onClick={() => handleMessage(user.id)}
                     >
-                      <MessageCircle className="h-3 w-3" />
+                      <MessageCircle className="h-4 w-4" />
                     </Button>
                   ) : connectionStatus[user.id] === 'PENDING' ? (
                     <Button
                       size="sm"
                       variant="outline"
-                      className="rounded-xl border-orange-200 bg-orange-50 text-orange-700"
+                      className="h-10 w-10 shrink-0 rounded-full p-0 border-orange-200 bg-orange-50 text-orange-700"
                       disabled
                     >
-                      <Check className="h-3 w-3" />
+                      <Check className="h-4 w-4" />
                     </Button>
                   ) : (
                     <Button
                       size="sm"
                       variant="outline"
-                      className="rounded-xl border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                      className="h-10 w-10 shrink-0 rounded-full p-0 border-blue-200 hover:bg-blue-50 hover:text-blue-600"
                       onClick={() => handleConnect(user.id, user.name)}
                       disabled={loadingUsers.has(user.id)}
                     >
                       {loadingUsers.has(user.id) ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <UserPlus className="h-3 w-3" />
+                        <UserPlus className="h-4 w-4" />
                       )}
                     </Button>
                   )}
