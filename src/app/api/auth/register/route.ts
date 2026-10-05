@@ -8,7 +8,8 @@ const registerSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  role: z.enum(['STUDENT', 'ALUMNI', 'ADMIN']).optional(),
+  // ADMIN is never self-assignable; admins are created out of band
+  role: z.enum(['STUDENT', 'ALUMNI']).optional(),
   course: z.string().optional(),
   batch: z.number().int().optional(),
   profession: z.string().optional(),
