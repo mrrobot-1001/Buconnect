@@ -81,10 +81,18 @@ export const postLimiter = new RateLimiter({
 });
 
 // Helper function to get client IP
+// Behind Cloudflare, CF-Connecting-IP is set by Cloudflare itself. The first
+// X-Forwarded-For entry is whatever the client sent, so it can't be the key
+// (rotating it would bypass every limit); use the entry nearest our proxy.
 export function getClientIp(request: Request): string {
+  const cfIp = request.headers.get('cf-connecting-ip');
+  if (cfIp) return cfIp.trim();
   const forwarded = request.headers.get('x-forwarded-for');
-  const ip = forwarded ? forwarded.split(',')[0] : 'unknown';
-  return ip;
+  if (forwarded) {
+    const hops = forwarded.split(',').map(h => h.trim()).filter(Boolean);
+    return hops[hops.length - 1] || 'unknown';
+  }
+  return request.headers.get('x-real-ip') || 'unknown';
 }
 
 // Helper function to apply rate limiting to API routes

@@ -5,24 +5,23 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
+function detectImageExtension(buf: Buffer): string | null {
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (buf.length >= 6 && ['GIF87a', 'GIF89a'].includes(buf.subarray(0, 6).toString('ascii'))) return 'gif';
+  if (buf.length >= 12 && buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP') return 'webp';
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const currentUser = await requireAuth();
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
-    if (!file) {
+    if (!file || typeof file === 'string') {
       return NextResponse.json(
         { error: 'No file provided' },
-        { status: 400 }
-      );
-    }
-
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json(
-        { error: 'Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed.' },
         { status: 400 }
       );
     }
@@ -42,16 +41,20 @@ export async function POST(request: NextRequest) {
       await mkdir(uploadDir, { recursive: true });
     }
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const extension = file.name.split('.').pop() || 'jpg';
-    const filename = `${currentUser.id}_${timestamp}.${extension}`;
-    const filepath = join(uploadDir, filename);
+    // The browser-supplied MIME type and filename are not trusted: the format
+    // is detected from the file's leading bytes and decides the extension, so
+    // an HTML/SVG file can never be stored and served as a page.
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const extension = detectImageExtension(buffer);
+    if (!extension) {
+      return NextResponse.json(
+        { error: 'Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed.' },
+        { status: 400 }
+      );
+    }
 
-    // Save file
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filepath, buffer);
+    const filename = `${currentUser.id}_${Date.now()}.${extension}`;
+    await writeFile(join(uploadDir, filename), buffer);
 
     // Update user profile with new image URL
     const imageUrl = `/uploads/profiles/${filename}`;

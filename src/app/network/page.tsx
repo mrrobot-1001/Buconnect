@@ -176,10 +176,14 @@ export default function NetworkPage() {
                 });
 
                 if (res.ok) {
-                    setConnectionStatus(prev => ({ ...prev, [userId]: 'PENDING' }));
+                    // If they had already asked us, the API connects straight away
+                    const { status } = await res.json();
+                    const connected = status === 'ACCEPTED';
+                    setConnectionStatus(prev => ({ ...prev, [userId]: connected ? 'CONNECTED' : 'PENDING' }));
+                    setIncomingRequests(prev => { const next = { ...prev }; delete next[userId]; return next; });
                     toast({
-                        title: "Request Sent!",
-                        description: `Connection request sent to ${userName} 🚀`,
+                        title: connected ? "Connected" : "Request sent",
+                        description: connected ? `You and ${userName} are now connected` : `Connection request sent to ${userName}`,
                     });
                 } else {
                     throw new Error('Failed to send request');

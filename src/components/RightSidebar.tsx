@@ -112,10 +112,12 @@ export default function RightSidebar() {
       });
 
       if (response.ok) {
-        setConnectionStatus(prev => ({ ...prev, [userId]: 'PENDING' }));
+        // If they had already asked us, the API connects straight away
+        const { status } = await response.json();
+        setConnectionStatus(prev => ({ ...prev, [userId]: status === 'ACCEPTED' ? 'ACCEPTED' : 'PENDING' }));
         toast({
-          title: "Request Sent! 📤",
-          description: `Connection request sent to ${userName}`,
+          title: status === 'ACCEPTED' ? "Connected" : "Request sent",
+          description: status === 'ACCEPTED' ? `You and ${userName} are now connected` : `Connection request sent to ${userName}`,
         });
       } else {
         const data = await response.json();

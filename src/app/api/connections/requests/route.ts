@@ -1,134 +1,122 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser, requireAuth } from '@/lib/auth/server';
+import { requireAuth } from '@/lib/auth/server';
+import { acceptRequest, disconnect } from '@/lib/connections';
 
+const userSummary = {
+  select: {
+    id: true,
+    name: true,
+    email: true,
+    role: true,
+    profileImage: true,
+    course: true,
+    batch: true,
+    profession: true,
+  },
+};
+
+function errorResponse(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message === 'Unauthorized') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  console.error(fallback, error);
+  return NextResponse.json({ error: fallback }, { status: 500 });
+}
+
+async function notifyAccepted(requesterId: string, accepter: { id: string; name: string }) {
+  await prisma.notification.create({
+    data: {
+      userId: requesterId,
+      type: 'connection_accepted',
+      title: 'Connection Accepted',
+      message: `${accepter.name} accepted your connection request`,
+      actorId: accepter.id,
+      link: `/profile/${accepter.id}`,
+    },
+  });
+}
+
+// The signed-in user's own requests. A userId query param is accepted for
+// older clients but must be the caller's own id.
 export async function GET(request: NextRequest) {
   try {
-    const currentUser = await getCurrentUser();
-    const searchParams = request.nextUrl.searchParams;
-    const userId = searchParams.get('userId') || currentUser?.id;
-
-    if (!userId) {
-      return NextResponse.json({ incoming: [], outgoing: [] });
+    const currentUser = await requireAuth();
+    const userId = request.nextUrl.searchParams.get('userId');
+    if (userId && userId !== currentUser.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get all requests sent TO this user (PENDING for acceptance, ACCEPTED for showing connections)
-    const incomingRequests = await prisma.connectionRequest.findMany({
-      where: {
-        followingId: userId,
-        status: { in: ['PENDING', 'ACCEPTED'] },
-      },
-      include: {
-        follower: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            profileImage: true,
-            course: true,
-            batch: true,
-            profession: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [incoming, outgoing] = await Promise.all([
+      prisma.connectionRequest.findMany({
+        where: { followingId: currentUser.id, status: { in: ['PENDING', 'ACCEPTED'] } },
+        include: { follower: userSummary },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.connectionRequest.findMany({
+        where: { followerId: currentUser.id, status: { in: ['PENDING', 'ACCEPTED'] } },
+        include: { following: userSummary },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
 
-    // Get all requests sent BY this user (PENDING for tracking, ACCEPTED for showing connections)
-    const outgoingRequests = await prisma.connectionRequest.findMany({
-      where: {
-        followerId: userId,
-        status: { in: ['PENDING', 'ACCEPTED'] },
-      },
-      include: {
-        following: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            profileImage: true,
-            course: true,
-            batch: true,
-            profession: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return NextResponse.json({
-      incoming: incomingRequests,
-      outgoing: outgoingRequests,
-    });
+    return NextResponse.json({ incoming, outgoing });
   } catch (error) {
-    console.error('Error fetching connection requests:', error);
-    return NextResponse.json({ error: 'Failed to fetch connection requests' }, { status: 500 });
+    return errorResponse(error, 'Failed to fetch connection requests');
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const currentUser = await requireAuth();
-    const body = await request.json();
-    const { recipientId } = body;
+    const { recipientId } = await request.json();
 
-    if (!recipientId) {
+    if (!recipientId || typeof recipientId !== 'string') {
       return NextResponse.json({ error: 'Recipient ID is required' }, { status: 400 });
     }
-
     if (currentUser.id === recipientId) {
       return NextResponse.json({ error: 'Cannot send request to yourself' }, { status: 400 });
     }
 
-    const recipient = await prisma.user.findUnique({
-      where: { id: recipientId },
-      select: { id: true },
-    });
-
+    const recipient = await prisma.user.findUnique({ where: { id: recipientId }, select: { id: true } });
     if (!recipient) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Check if request already exists
-    const existing = await prisma.connectionRequest.findUnique({
-      where: {
-        followerId_followingId: {
-          followerId: currentUser.id,
-          followingId: recipientId,
-        },
-      },
-    });
+    const [mine, theirs] = await Promise.all([
+      prisma.connectionRequest.findUnique({
+        where: { followerId_followingId: { followerId: currentUser.id, followingId: recipientId } },
+      }),
+      prisma.connectionRequest.findUnique({
+        where: { followerId_followingId: { followerId: recipientId, followingId: currentUser.id } },
+      }),
+    ]);
 
-    if (existing) {
-      if (existing.status === 'PENDING') {
-        return NextResponse.json({ error: 'Request already sent' }, { status: 409 });
-      }
-      if (existing.status === 'ACCEPTED') {
-        return NextResponse.json({ error: 'Already connected' }, { status: 409 });
-      }
-      // If rejected, allow sending again
+    if (mine?.status === 'ACCEPTED' || theirs?.status === 'ACCEPTED') {
+      return NextResponse.json({ error: 'Already connected' }, { status: 409 });
+    }
+    if (mine?.status === 'PENDING') {
+      return NextResponse.json({ error: 'Request already sent' }, { status: 409 });
     }
 
-    // Create connection request
-    const requestData = await prisma.connectionRequest.create({
-      data: {
-        followerId: currentUser.id,
-        followingId: recipientId,
-        status: 'PENDING',
-      },
+    // They already asked us: requesting back means both want it, so connect now
+    if (theirs?.status === 'PENDING') {
+      await acceptRequest(theirs.id, recipientId, currentUser.id);
+      await notifyAccepted(recipientId, currentUser);
+      return NextResponse.json({ ...theirs, status: 'ACCEPTED' });
+    }
+
+    // New request, or a fresh try after an earlier rejection
+    const requestData = await prisma.connectionRequest.upsert({
+      where: { followerId_followingId: { followerId: currentUser.id, followingId: recipientId } },
+      create: { followerId: currentUser.id, followingId: recipientId, status: 'PENDING' },
+      update: { status: 'PENDING' },
       include: {
-        follower: {
-          select: { id: true, name: true, profileImage: true },
-        },
-        following: {
-          select: { id: true, name: true, profileImage: true },
-        },
+        follower: { select: { id: true, name: true, profileImage: true } },
+        following: { select: { id: true, name: true, profileImage: true } },
       },
     });
 
-    // Create notification for recipient
     await prisma.notification.create({
       data: {
         userId: recipientId,
@@ -142,119 +130,67 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(requestData);
   } catch (error) {
-    console.error('Error creating connection request:', error);
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    return NextResponse.json({ error: 'Failed to create connection request' }, { status: 500 });
+    return errorResponse(error, 'Failed to create connection request');
   }
 }
 
+// Recipient accepts or rejects a pending request.
 export async function PATCH(request: NextRequest) {
   try {
     const currentUser = await requireAuth();
-    const body = await request.json();
-    const { requestId, status }: { requestId: string; status: string } = body;
+    const { requestId, status } = await request.json();
 
     if (!requestId || !status) {
       return NextResponse.json({ error: 'Request ID and status are required' }, { status: 400 });
     }
-
     if (!['ACCEPTED', 'REJECTED'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    // Update request status
-    const requestData = await prisma.connectionRequest.findUnique({
-      where: { id: requestId },
-    });
-
+    const requestData = await prisma.connectionRequest.findUnique({ where: { id: requestId } });
     if (!requestData) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 });
     }
-
-    // Check if current user is the recipient
     if (requestData.followingId !== currentUser.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    if (requestData.status !== 'PENDING') {
+      return NextResponse.json({ error: `Request already ${requestData.status.toLowerCase()}` }, { status: 409 });
+    }
 
-    const updatedRequest = await prisma.connectionRequest.update({
+    if (status === 'ACCEPTED') {
+      await acceptRequest(requestId, requestData.followerId, requestData.followingId);
+      await notifyAccepted(requestData.followerId, currentUser);
+    } else {
+      await prisma.connectionRequest.update({ where: { id: requestId }, data: { status: 'REJECTED' } });
+    }
+
+    const updated = await prisma.connectionRequest.findUnique({
       where: { id: requestId },
-      data: { status: status as 'PENDING' | 'ACCEPTED' | 'REJECTED' },
       include: {
-        follower: {
-          select: { id: true, name: true, profileImage: true },
-        },
-        following: {
-          select: { id: true, name: true, profileImage: true },
-        },
+        follower: { select: { id: true, name: true, profileImage: true } },
+        following: { select: { id: true, name: true, profileImage: true } },
       },
     });
-
-    // If accepted, create the connection
-    if (status === 'ACCEPTED') {
-      await prisma.connection.create({
-        data: {
-          followerId: requestData.followerId,
-          followingId: requestData.followingId,
-        },
-      }).catch((e: any) => {
-        // Ignore duplicate errors
-        if (e.code !== 'P2002') throw e;
-      });
-
-      // Create notification for the requester (follower)
-      await prisma.notification.create({
-        data: {
-          userId: requestData.followerId,
-          type: 'connection_accepted',
-          title: 'Connection Accepted',
-          message: `Your connection request was accepted`,
-          actorId: requestData.followingId,
-          link: `/profile/${requestData.followingId}`,
-        },
-      });
-    }
-
-    return NextResponse.json(updatedRequest);
+    return NextResponse.json(updated);
   } catch (error) {
-    console.error('Error updating connection request:', error);
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (error instanceof Error && error.message === 'Forbidden') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    return NextResponse.json({ error: 'Failed to update connection request' }, { status: 500 });
+    return errorResponse(error, 'Failed to update connection request');
   }
 }
 
+// Withdraw a request or remove a connection (works from either side).
 export async function DELETE(request: NextRequest) {
   try {
     const currentUser = await requireAuth();
-    const body = await request.json();
-    const { recipientId } = body;
+    const { recipientId } = await request.json();
 
     if (!recipientId) {
       return NextResponse.json({ error: 'Recipient ID is required' }, { status: 400 });
     }
 
-    // Delete the request (works in both directions - sender or recipient can cancel)
-    const deleted = await prisma.connectionRequest.deleteMany({
-      where: {
-        OR: [
-          { followerId: currentUser.id, followingId: recipientId },
-          { followerId: recipientId, followingId: currentUser.id },
-        ],
-      },
-    });
-
-    return NextResponse.json({ success: true, deleted: deleted.count > 0 });
+    const deleted = await disconnect(currentUser.id, recipientId);
+    return NextResponse.json({ success: true, deleted });
   } catch (error) {
-    console.error('Error deleting connection request:', error);
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    return NextResponse.json({ error: 'Failed to delete connection request' }, { status: 500 });
+    return errorResponse(error, 'Failed to delete connection request');
   }
 }

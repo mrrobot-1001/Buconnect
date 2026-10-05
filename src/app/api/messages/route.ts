@@ -131,13 +131,20 @@ export async function POST(request: NextRequest) {
   try {
     const currentUser = await requireAuth();
     const body = await request.json();
-    const { recipientId, content } = body;
+    const { recipientId } = body;
+    const content = typeof body.content === 'string' ? body.content.trim() : '';
 
-    if (!recipientId || !content) {
+    if (!recipientId || typeof recipientId !== 'string' || !content) {
       return NextResponse.json(
         { error: 'recipientId and content are required' },
         { status: 400 }
       );
+    }
+    if (content.length > 5000) {
+      return NextResponse.json({ error: 'Message is too long (max 5000 characters)' }, { status: 400 });
+    }
+    if (recipientId === currentUser.id) {
+      return NextResponse.json({ error: 'Cannot message yourself' }, { status: 400 });
     }
 
     // Check if recipient exists

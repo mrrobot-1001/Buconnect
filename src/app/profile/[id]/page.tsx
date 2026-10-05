@@ -186,7 +186,9 @@ export default function ProfilePage() {
                 });
 
                 if (res.ok) {
-                    setConnectionStatus('PENDING');
+                    // If they had already asked us, the API connects straight away
+                    const { status } = await res.json();
+                    setConnectionStatus(status === 'ACCEPTED' ? 'CONNECTED' : 'PENDING');
                 }
             }
         } catch (error) {
@@ -544,10 +546,10 @@ export default function ProfilePage() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
+                <div className="grid grid-cols-2 divide-x divide-gray-100 border-t border-gray-100">
                     {[
-                        { label: 'Followers', value: user._count?.followers || 0 },
-                        { label: 'Following', value: user._count?.following || 0 },
+                        // Connections are mutual, so followers == following
+                        { label: 'Connections', value: user._count?.followers || 0 },
                         { label: 'Posts', value: user._count?.posts || 0 },
                     ].map(stat => (
                         <div key={stat.label} className="py-3 text-center">
