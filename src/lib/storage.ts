@@ -19,8 +19,9 @@ export async function uploadAvatar(filename: string, extension: string, buffer: 
   const res = await fetch(`${baseUrl}/storage/v1/object/${AVATAR_BUCKET}/${path}`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${key}`,
       apikey: key,
+      // Secret keys (sb_secret_...) aren't JWTs and only go on apikey; legacy service_role JWTs also need Bearer
+      ...(key.startsWith('eyJ') ? { Authorization: `Bearer ${key}` } : {}),
       'Content-Type': MIME_BY_EXTENSION[extension] ?? 'application/octet-stream',
       'x-upsert': 'false',
     },
