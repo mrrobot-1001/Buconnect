@@ -3,9 +3,17 @@ import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production-min-32-chars'
-);
+const DEV_JWT_SECRET = 'your-super-secret-jwt-key-change-in-production-min-32-chars';
+
+// Resolved lazily so `next build` (NODE_ENV=production) doesn't need the secret
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production' && (!secret || secret.length < 32)) {
+    throw new Error('JWT_SECRET must be set to at least 32 characters in production');
+  }
+  return new TextEncoder().encode(secret || DEV_JWT_SECRET);
+}
+
 const JWT_EXPIRY = '7d';
 
 export interface JWTPayload {
@@ -29,12 +37,13 @@ export async function createToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): Pro
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(JWT_EXPIRY)
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
+  const secret = getJwtSecret();
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, secret);
     return payload as unknown as JWTPayload;
   } catch {
     return null;

@@ -139,6 +139,17 @@ The [`Dockerfile`](Dockerfile) has two useful targets:
 
 A typical Compose setup runs `db` (postgres:16-alpine with a healthcheck) → `migrate` (`builder` target) → `app` (`runner` target, with a volume on `public/uploads`). Redeploying is `git pull && docker compose up -d --build`; nightly `pg_dump` backups cover the database and uploads.
 
+## Deploying (Vercel + Supabase)
+
+1. Create a Supabase project and a public Storage bucket named `avatars`.
+2. Set these environment variables in Vercel:
+   - `DATABASE_URL`: transaction pooler (port 6543) with `?pgbouncer=true&connection_limit=1`
+   - `DIRECT_URL`: direct/session connection (port 5432)
+   - `JWT_SECRET`: at least 32 random characters (required in production)
+   - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`: used for profile picture uploads (server-only)
+3. Apply migrations from your machine with both URLs set: `npm run db:migrate:prod` (Prisma runs migrations over `DIRECT_URL`)
+4. Deploy; `postinstall` runs `prisma generate` automatically.
+
 ## Project structure
 
 ```

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { uploadAvatar } from '@/lib/storage';
 
 function detectImageExtension(buf: Buffer): string | null {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
@@ -35,12 +33,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create upload directory if it doesn't exist
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'profiles');
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
-
     // The browser-supplied MIME type and filename are not trusted: the format
     // is detected from the file's leading bytes and decides the extension, so
     // an HTML/SVG file can never be stored and served as a page.
@@ -54,10 +46,9 @@ export async function POST(request: NextRequest) {
     }
 
     const filename = `${currentUser.id}_${Date.now()}.${extension}`;
-    await writeFile(join(uploadDir, filename), buffer);
+    const imageUrl = await uploadAvatar(filename, extension, buffer);
 
     // Update user profile with new image URL
-    const imageUrl = `/uploads/profiles/${filename}`;
     await prisma.user.update({
       where: { id: currentUser.id },
       data: { profileImage: imageUrl },
